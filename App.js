@@ -1,5 +1,5 @@
 // src/App.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Clock,
   AlertCircle,
@@ -11,9 +11,7 @@ import {
 import RichTextEditor from './components/RichTextEditor';
 import TagInput from './components/TagInput';
 import CheatSheetModal from './components/CheatSheetModal';
-
-// Tailwind CSS import
-import './index.css';
+import './index.css'; // Import Tailwind CSS styles
 
 // Default phases aligned with the Cheat Sheet
 const defaultPhases = {
@@ -23,11 +21,7 @@ const defaultPhases = {
     duration: '5-10 min',
     purpose: 'Build trust and rapport',
     principle: 'Build Trust',
-    essentialActions: [
-      'Actively listen',
-      'Be present',
-      'Be open',
-    ],
+    essentialActions: ['Actively listen', 'Be present', 'Be open'],
     questions: [
       {
         text: 'How are you feeling today?',
@@ -55,11 +49,7 @@ const defaultPhases = {
     duration: '10-15 min',
     purpose: 'Understand needs, challenges, and motivations',
     principle: 'Understand Needs',
-    essentialActions: [
-      'Identify challenges',
-      'Uncover motivations',
-      'Offer support',
-    ],
+    essentialActions: ['Identify challenges', 'Uncover motivations', 'Offer support'],
     questions: [
       {
         text: "What's the biggest challenge you're facing right now?",
@@ -74,15 +64,8 @@ const defaultPhases = {
         categories: ['Support', 'Relationship'],
       },
     ],
-    tips: [
-      'Use open-ended questions',
-      'Identify challenges early',
-      'Offer concrete support',
-    ],
-    redFlags: [
-      'Signs of disengagement or burnout',
-      'Lack of progress on key tasks',
-    ],
+    tips: ['Use open-ended questions', 'Identify challenges early', 'Offer concrete support'],
+    redFlags: ['Signs of disengagement or burnout', 'Lack of progress on key tasks'],
   },
   structure: {
     id: 'structure',
@@ -90,11 +73,7 @@ const defaultPhases = {
     duration: '5-10 min',
     purpose: 'Optimize time and ensure productive discussions',
     principle: 'Optimize Time',
-    essentialActions: [
-      'Set a clear agenda',
-      'Prioritize topics',
-      'Timebox discussions',
-    ],
+    essentialActions: ['Set a clear agenda', 'Prioritize topics', 'Timebox discussions'],
     questions: [
       {
         text: 'What are the most important things we need to discuss today?',
@@ -109,13 +88,8 @@ const defaultPhases = {
         categories: ['Clarity'],
       },
     ],
-    tips: [
-      'Ensure clear expectations and ownership for action items',
-    ],
-    redFlags: [
-      'Lack of clarity on priorities',
-      'Too many unfocused topics',
-    ],
+    tips: ['Ensure clear expectations and ownership for action items'],
+    redFlags: ['Lack of clarity on priorities', 'Too many unfocused topics'],
   },
   document: {
     id: 'document',
@@ -123,11 +97,7 @@ const defaultPhases = {
     duration: '5-10 min',
     purpose: 'Ensure clarity and accountability',
     principle: 'Ensure Clarity',
-    essentialActions: [
-      'Capture key decisions',
-      'Assign action items',
-      'Share notes',
-    ],
+    essentialActions: ['Capture key decisions', 'Assign action items', 'Share notes'],
     questions: [
       {
         text: "Let's make sure we capture that decision.",
@@ -142,13 +112,8 @@ const defaultPhases = {
         categories: ['Accountability', 'Time Management'],
       },
     ],
-    tips: [
-      'Don’t forget to capture any agreed-upon changes to project scope',
-    ],
-    redFlags: [
-      'Unclear ownership of tasks',
-      'Missing deadlines for action items',
-    ],
+    tips: ['Don’t forget to capture any agreed-upon changes to project scope'],
+    redFlags: ['Unclear ownership of tasks', 'Missing deadlines for action items'],
   },
   grow: {
     id: 'grow',
@@ -156,11 +121,7 @@ const defaultPhases = {
     duration: '10-15 min',
     purpose: 'Facilitate development and growth opportunities',
     principle: 'Facilitate Development',
-    essentialActions: [
-      'Discuss aspirations',
-      'Provide feedback',
-      'Identify resources',
-    ],
+    essentialActions: ['Discuss aspirations', 'Provide feedback', 'Identify resources'],
     questions: [
       {
         text: 'What are your long-term career goals?',
@@ -175,13 +136,8 @@ const defaultPhases = {
         categories: ['Growth', 'Resources'],
       },
     ],
-    tips: [
-      'Encourage continuous learning and provide opportunities for skill development',
-    ],
-    redFlags: [
-      'Lack of growth mindset',
-      'No progress on development goals',
-    ],
+    tips: ['Encourage continuous learning and provide opportunities for skill development'],
+    redFlags: ['Lack of growth mindset', 'No progress on development goals'],
   },
 };
 
@@ -200,15 +156,77 @@ const allCategories = [
 ];
 
 function App() {
-  const [phases, setPhases] = useState(defaultPhases);
+  const [phases, setPhases] = useState(() => {
+    try {
+      const savedPhases = localStorage.getItem('phases');
+      return savedPhases ? JSON.parse(savedPhases) : defaultPhases;
+    } catch (error) {
+      console.error("Error loading phases from localStorage:", error);
+      return defaultPhases;
+    }
+  });
   const [activePhase, setActivePhase] = useState('connect');
-  const [notes, setNotes] = useState('');
-  const [noteCategories, setNoteCategories] = useState([]);
+  const [notes, setNotes] = useState(() => {
+    try {
+      return localStorage.getItem('notes') || '';
+    } catch (error) {
+      console.error("Error loading notes from localStorage:", error);
+      return '';
+    }
+  });
+  const [noteCategories, setNoteCategories] = useState(() => {
+    try {
+      const savedCategories = localStorage.getItem('noteCategories');
+      return savedCategories ? JSON.parse(savedCategories) : [];
+    } catch (error) {
+      console.error("Error loading note categories from localStorage:", error);
+      return [];
+    }
+  });
   const [showCheatSheet, setShowCheatSheet] = useState(false);
-  const [actionItems, setActionItems] = useState([]);
+  const [actionItems, setActionItems] = useState(() => {
+    try {
+      const savedItems = localStorage.getItem('actionItems');
+      return savedItems ? JSON.parse(savedItems) : [];
+    } catch (error) {
+      console.error("Error loading action items from localStorage:", error);
+      return [];
+    }
+  });
   const [selectedCategories, setSelectedCategories] = useState([]);
 
-  // Function to add an action item
+  useEffect(() => {
+    try {
+      localStorage.setItem('phases', JSON.stringify(phases));
+    } catch (error) {
+      console.error("Error saving phases to localStorage:", error);
+    }
+  }, [phases]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('notes', notes);
+    } catch (error) {
+      console.error("Error saving notes to localStorage:", error);
+    }
+  }, [notes]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('noteCategories', JSON.stringify(noteCategories));
+    } catch (error) {
+      console.error("Error saving note categories to localStorage:", error);
+    }
+  }, [noteCategories]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('actionItems', JSON.stringify(actionItems));
+    } catch (error) {
+      console.error("Error saving action items to localStorage:", error);
+    }
+  }, [actionItems]);
+
   const addActionItem = () => {
     setActionItems([
       ...actionItems,
@@ -216,14 +234,22 @@ function App() {
     ]);
   };
 
-  // Function to update an action item
   const updateActionItem = (index, field, value) => {
     const updatedItems = [...actionItems];
+    if (field === 'deadline') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        alert("Invalid date format. Please use YYYY-MM-DD.");
+        return;
+      }
+    }
     updatedItems[index][field] = value;
     setActionItems(updatedItems);
   };
 
-  // Function to toggle category selection
+  const deleteActionItem = (index) => {
+    setActionItems(actionItems.filter((_, i) => i !== index));
+  };
+
   const toggleCategory = (category) => {
     setSelectedCategories(
       selectedCategories.includes(category)
@@ -232,11 +258,10 @@ function App() {
     );
   };
 
-  // Function to filter questions and notes based on selected categories
   const filterContentByCategories = (content) => {
     if (selectedCategories.length === 0) return content;
     return content.filter((item) =>
-      item.categories.some((cat) => selectedCategories.includes(cat))
+      item.categories.some((category) => selectedCategories.includes(category))
     );
   };
 
@@ -283,9 +308,7 @@ function App() {
                   }`}
                 >
                   {phase.title}
-                  <span className="text-xs opacity-75">
-                    ({phase.duration})
-                  </span>
+                  <span className="text-xs opacity-75">({phase.duration})</span>
                 </button>
               ))}
               {/* Option to add new phases */}
@@ -348,33 +371,33 @@ function App() {
               <section>
                 <h3 className="text-lg font-semibold mb-4">Key Questions</h3>
                 <ul className="space-y-4">
-                  {filterContentByCategories(
-                    phases[activePhase].questions
-                  ).map((q, i) => (
-                    <li
-                      key={i}
-                      className="bg-white rounded-lg p-4 shadow-sm border"
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-500 flex items-center justify-center flex-shrink-0">
-                          {i + 1}
-                        </span>
-                        <div className="flex-1">
-                          <p className="font-medium mb-2">{q.text}</p>
-                          <div className="flex flex-wrap gap-2">
-                            {q.categories.map((cat) => (
-                              <span
-                                key={cat}
-                                className="px-2 py-1 bg-blue-50 text-blue-600 rounded-full text-xs"
-                              >
-                                {cat}
-                              </span>
-                            ))}
+                  {filterContentByCategories(phases[activePhase].questions).map(
+                    (q, i) => (
+                      <li
+                        key={i}
+                        className="bg-white rounded-lg p-4 shadow-sm border"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-500 flex items-center justify-center flex-shrink-0">
+                            {i + 1}
+                          </span>
+                          <div className="flex-1">
+                            <p className="font-medium mb-2">{q.text}</p>
+                            <div className="flex flex-wrap gap-2">
+                              {q.categories.map((cat) => (
+                                <span
+                                  key={cat}
+                                  className="px-2 py-1 bg-blue-50 text-blue-600 rounded-full text-xs"
+                                >
+                                  {cat}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    )
+                  )}
                 </ul>
               </section>
 
@@ -450,6 +473,9 @@ function App() {
                           <option value="in-progress">In Progress</option>
                           <option value="completed">Completed</option>
                         </select>
+                        <button onClick={() => deleteActionItem(i)} className="text-red-500 hover:text-red-700">
+                          Delete
+                        </button>
                       </div>
                     </li>
                   ))}
@@ -487,9 +513,7 @@ function App() {
                   <div className="flex">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-1" />
                     <div className="ml-3">
-                      <h4 className="text-lg font-medium text-green-800 mb-2">
-                        Tips
-                      </h4>
+                      <h4 className="text-lg font-medium text-green-800 mb-2">Tips</h4>
                       <ul className="text-sm text-green-700 space-y-1">
                         {phases[activePhase].tips.map((tip, i) => (
                           <li key={i} className="flex items-start gap-2">
