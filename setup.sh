@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# one-on-one-installer.sh
-
 # Exit immediately if a command exits with a non-zero status
 set -e
 
@@ -28,9 +26,8 @@ print_error() {
 check_command() {
     if ! command -v "$1" &> /dev/null; then
         print_error "Required command '$1' is not installed."
-        return 1
+        exit 1
     fi
-    return 0
 }
 
 # Function to check Node.js version
@@ -42,25 +39,21 @@ check_node_version() {
     if [[ "$(printf '%s\n' "$min_version" "$current_version" | sort -V | head -n1)" != "$min_version" ]] || \
        [[ "$(printf '%s\n' "$max_version" "$current_version" | sort -V | tail -n1)" != "$max_version" ]]; then
         print_error "Node.js version must be >= $min_version and < $max_version. Current version: $current_version"
-        return 1
+        exit 1
     fi
-    return 0
 }
 
 # Check if Node.js and npm are installed
-check_command node || {
-    print_error "Node.js is not installed. Please install Node.js version >=14.0.0 and <18.0.0."
-    exit 1
-}
+check_command node
+check_node_version
+check_command npm
 
-check_node_version || {
+# Check for existing npm processes
+if lsof -i tcp:3000 | grep LISTEN; then
+    print_error "Port 3000 is already in use. Please close any running applications on this port."
     exit 1
-}
+fi
 
-check_command npm || {
-    print_error "npm is not installed. Please install npm."
-    exit 1
-}
 # Create project directory
 PROJECT_DIR="$HOME/one-on-one-tool"
 print_status "Setting up project in $PROJECT_DIR"
@@ -82,6 +75,7 @@ fi
 mkdir -p "$PROJECT_DIR"
 
 cd "$PROJECT_DIR"
+
 # Initialize new React project
 print_status "Creating new React project..."
 npx create-react-app . --template typescript
@@ -91,23 +85,38 @@ print_status "Installing dependencies..."
 npm install \
     @headlessui/react \
     @radix-ui/react-alert-dialog \
-    class-variance-authority \
+    @shadcn/ui \
     clsx \
     lucide-react \
     tailwind-merge \
-    tailwindcss \
+    tailwindcss@latest \
     @tailwindcss/forms \
-    @tailwindcss/typography
+    @tailwindcss/typography \
+    react@18.2.0 \
+    react-dom@18.2.0 || {
+        print_error "Failed to install dependencies"
+        exit 1
+    }
 
 # Install dev dependencies
 print_status "Installing dev dependencies..."
 npm install --save-dev \
-    @types/node \
-    @types/react \
-    @types/react-dom \
+    @types/node@18.17.1 \
+    @types/react@18.2.18 \
+    @types/react-dom@18.2.7 \
     autoprefixer \
     postcss \
-    typescript
+    typescript \
+    eslint \
+    eslint-config-react-app \
+    eslint-plugin-react-hooks \
+    prettier \
+    eslint-config-prettier \
+    eslint-plugin-prettier || {
+        print_error "Failed to install dev dependencies"
+        exit 1
+    }
+
 # Initialize Tailwind CSS
 print_status "Setting up Tailwind CSS..."
 npx tailwindcss init -p
@@ -116,62 +125,66 @@ npx tailwindcss init -p
 print_status "Configuring Tailwind CSS..."
 cat > tailwind.config.js <<'EOF'
 /** @type {import('tailwindcss').Config} */
+const { fontFamily } = require('tailwindcss/defaultTheme')
+
 module.exports = {
   content: [
-    "./src/**/*.{js,jsx,ts,tsx}",
+    './src/**/*.{js,jsx,ts,tsx}',
+    './node_modules/@shadcn/ui/**/*.js',
   ],
-  darkMode: 'class', // Enable dark mode
+  darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-sans)', ...fontFamily.sans],
+      },
       colors: {
-        border: "hsl(var(--border) / <alpha-value>)",
-        input: "hsl(var(--input) / <alpha-value>)",
-        ring: "hsl(var(--ring) / <alpha-value>)",
-        background: "hsl(var(--background) / <alpha-value>)",
-        foreground: "hsl(var(--foreground) / <alpha-value>)",
+        border: 'hsl(var(--border) / <alpha-value>)',
+        input: 'hsl(var(--input) / <alpha-value>)',
+        ring: 'hsl(var(--ring) / <alpha-value>)',
+        background: 'hsl(var(--background) / <alpha-value>)',
+        foreground: 'hsl(var(--foreground) / <alpha-value>)',
         primary: {
-          DEFAULT: "hsl(var(--primary) / <alpha-value>)",
-          foreground: "hsl(var(--primary-foreground) / <alpha-value>)",
-        },
-        secondary: {
-          DEFAULT: "hsl(var(--secondary) / <alpha-value>)",
-          foreground: "hsl(var(--secondary-foreground) / <alpha-value>)",
+          DEFAULT: 'hsl(var(--primary) / <alpha-value>)',
+          foreground: 'hsl(var(--primary-foreground) / <alpha-value>)',
         },
         destructive: {
-          DEFAULT: "hsl(var(--destructive) / <alpha-value>)",
-          foreground: "hsl(var(--destructive-foreground) / <alpha-value>)",
+          DEFAULT: 'hsl(var(--destructive) / <alpha-value>)',
+          foreground: 'hsl(var(--destructive-foreground) / <alpha-value>)',
         },
         muted: {
-          DEFAULT: "hsl(var(--muted) / <alpha-value>)",
-          foreground: "hsl(var(--muted-foreground) / <alpha-value>)",
+          DEFAULT: 'hsl(var(--muted) / <alpha-value>)',
+          foreground: 'hsl(var(--muted-foreground) / <alpha-value>)',
         },
         accent: {
-          DEFAULT: "hsl(var(--accent) / <alpha-value>)",
-          foreground: "hsl(var(--accent-foreground) / <alpha-value>)",
+          DEFAULT: 'hsl(var(--accent) / <alpha-value>)',
+          foreground: 'hsl(var(--accent-foreground) / <alpha-value>)',
         },
         popover: {
-          DEFAULT: "hsl(var(--popover) / <alpha-value>)",
-          foreground: "hsl(var(--popover-foreground) / <alpha-value>)",
+          DEFAULT: 'hsl(var(--popover) / <alpha-value>)',
+          foreground: 'hsl(var(--popover-foreground) / <alpha-value>)',
         },
         card: {
-          DEFAULT: "hsl(var(--card) / <alpha-value>)",
-          foreground: "hsl(var(--card-foreground) / <alpha-value>)",
+          DEFAULT: 'hsl(var(--card) / <alpha-value>)',
+          foreground: 'hsl(var(--card-foreground) / <alpha-value>)',
         },
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)',
       },
     },
   },
   plugins: [
     require('@tailwindcss/forms'),
     require('@tailwindcss/typography'),
+    require('@shadcn/ui/plugins'),
   ],
 }
 EOF
-# Create src/index.css
+
+# Create src/index.css with complete CSS variables
 print_status "Creating index.css..."
 cat > src/index.css <<'EOF'
 @tailwind base;
@@ -189,11 +202,14 @@ cat > src/index.css <<'EOF'
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+
     --primary: 222.2 47.4% 11.2%;
     --primary-foreground: 210 40% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
 
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
@@ -201,12 +217,7 @@ cat > src/index.css <<'EOF'
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 215 20.2% 65.1%;
 
     --radius: 0.5rem;
   }
@@ -221,11 +232,14 @@ cat > src/index.css <<'EOF'
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
 
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+
     --primary: 210 40% 98%;
     --primary-foreground: 222.2 47.4% 11.2%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
 
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
@@ -233,30 +247,23 @@ cat > src/index.css <<'EOF'
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
   }
 
   body {
     @apply bg-background text-foreground;
   }
-
-  * {
-    @apply border-border;
-  }
 }
 EOF
-# Update src/index.tsx
+
+# Update src/index.tsx with ErrorBoundary
 print_status "Updating index.tsx..."
 cat > src/index.tsx <<'EOF'
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Failed to find the root element');
@@ -264,17 +271,88 @@ const root = createRoot(container);
 
 root.render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>
 );
 EOF
-# Remove default App files if they exist
-[ -f src/App.css ] && rm src/App.css
-[ -f src/App.test.tsx ] && rm src/App.test.tsx
-[ -f src/logo.svg ] && rm src/logo.svg
-[ -f src/reportWebVitals.ts ] && rm src/reportWebVitals.ts
-[ -f src/setupTests.ts ] && rm src/setupTests.ts
-# Create src/App.tsx
+
+# Remove default files
+rm -f src/App.css src/App.test.tsx src/logo.svg src/reportWebVitals.ts src/setupTests.ts
+
+# Create necessary directories
+mkdir -p src/components/ui src/lib src/hooks src/constants src/types src/components
+
+# Create .eslintrc.js
+print_status "Creating ESLint configuration..."
+cat > .eslintrc.js <<'EOF'
+module.exports = {
+  extends: ['react-app', 'react-app/jest', 'plugin:react-hooks/recommended', 'prettier'],
+  plugins: ['react-hooks', 'prettier'],
+  rules: {
+    'prettier/prettier': 'error',
+  },
+};
+EOF
+
+# Create .prettierrc
+print_status "Creating Prettier configuration..."
+cat > .prettierrc <<'EOF'
+{
+  "semi": true,
+  "singleQuote": true,
+  "printWidth": 80,
+  "tabWidth": 2,
+  "trailingComma": "es5"
+}
+EOF
+
+# Update tsconfig.json with strict mode and paths
+print_status "Updating tsconfig.json..."
+cat > tsconfig.json <<'EOF'
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["DOM", "DOM.Iterable", "ES2020"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "baseUrl": "src",
+    "paths": {
+      "@components/*": ["components/*"],
+      "@hooks/*": ["hooks/*"],
+      "@constants/*": ["constants/*"],
+      "@types/*": ["types/*"],
+      "@lib/*": ["lib/*"]
+    }
+  },
+  "include": ["src"]
+}
+EOF
+
+# Create .env file
+print_status "Creating .env file..."
+cat > .env <<'EOF'
+# You can set custom environment variables here
+EOF
+
+# Create src/global.d.ts for global types
+print_status "Creating global types declaration..."
+cat > src/global.d.ts <<'EOF'
+// Add any global type declarations here
+EOF
+
+
+# Create src/App.tsx with the full content
 print_status "Creating src/App.tsx..."
 cat > src/App.tsx <<'EOF'
 import React, { useMemo } from 'react';
@@ -288,107 +366,184 @@ import { useTimer } from './hooks/useTimer';
 import { usePhases } from './hooks/usePhases';
 import { RED_FLAGS, INITIAL_TIMER } from './constants';
 import type { PhaseKey } from './types';
-import { ErrorBoundary } from './components/ErrorBoundary';
 
 const App: React.FC = () => {
-  // ... (Include the full content of App component as provided in the previous response)
+  const {
+    timer,
+    isRunning: isTimerRunning,
+    startTimer,
+    pauseTimer,
+    resetTimer,
+    formatTime,
+  } = useTimer(INITIAL_TIMER);
+
+  const {
+    phases,
+    activePhase,
+    setActivePhase,
+    completedTasks,
+    toggleTaskCompletion,
+    notes,
+    handleNotesChange,
+  } = usePhases();
+
+  const currentPhase = phases[activePhase];
+
+  // Compute completion percentage
+  const completionPercentage = useMemo(() => {
+    const total = Object.keys(phases).reduce(
+      (acc, phase) => acc + phases[phase as PhaseKey].questions.length,
+      0
+    );
+    const completed = Object.values(completedTasks).filter(Boolean).length;
+    return Math.round((completed / total) * 100);
+  }, [phases, completedTasks]);
+
+  return (
+    <div className="max-w-6xl mx-auto p-6 space-y-6">
+      {/* Timer and Progress Section */}
+      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Clock className="w-5 h-5" />
+            <span className="font-mono text-xl">{formatTime(timer)}</span>
+          </div>
+          <div className="space-x-2">
+            {!isTimerRunning ? (
+              <button
+                onClick={startTimer}
+                className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+              >
+                Start
+              </button>
+            ) : (
+              <button
+                onClick={pauseTimer}
+                className="px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
+              >
+                Pause
+              </button>
+            )}
+            <button
+              onClick={resetTimer}
+              className="px-3 py-1 bg-gray-500 text-white rounded-md hover:bg-gray-600"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span>Progress: {completionPercentage}%</span>
+          <div className="w-32 h-2 bg-gray-200 rounded-full">
+            <div
+              className="h-full bg-blue-500 rounded-full"
+              style={{ width: `${completionPercentage}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Phase Navigation */}
+      <PhaseNavigation
+        phases={phases}
+        activePhase={activePhase}
+        onPhaseChange={setActivePhase}
+      />
+
+      {/* Main Content */}
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Questions Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {currentPhase.title} ({currentPhase.duration})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ul className="space-y-3">
+              {currentPhase.questions.map((question, idx) => (
+                <QuestionItem
+                  key={idx}
+                  question={question}
+                  isCompleted={!!completedTasks[`${activePhase}-${idx}`]}
+                  onToggle={() => toggleTaskCompletion(activePhase, idx)}
+                />
+              ))}
+            </ul>
+            <textarea
+              value={notes[activePhase]}
+              onChange={(e) => handleNotesChange(activePhase, e.target.value)}
+              placeholder="Add notes..."
+              className="w-full mt-4 p-2 border rounded-md min-h-[100px]"
+            />
+          </CardContent>
+        </Card>
+
+        {/* Tips and Warnings Section */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Tips</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TipsList tips={currentPhase.tips} />
+            </CardContent>
+          </Card>
+
+          <Alert variant="destructive">
+            <AlertCircle className="w-4 h-4" />
+            <AlertDescription className="mt-2">
+              <h4 className="font-semibold mb-2">Red Flags to Watch For:</h4>
+              <ul className="list-disc pl-4 space-y-1">
+                {RED_FLAGS.map((flag, idx) => (
+                  <li key={idx}>{flag}</li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default App;
 EOF
-# Update package.json
-print_status "Updating package.json..."
-cat > package.json <<'EOF'
-{
-  "name": "one-on-one-tool",
-  "version": "0.1.0",
-  "private": true,
-  "dependencies": {
-    "@headlessui/react": "^1.7.17",
-    "@radix-ui/react-alert-dialog": "^1.0.5",
-    "class-variance-authority": "^0.7.0",
-    "clsx": "^2.0.0",
-    "lucide-react": "^0.284.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "tailwind-merge": "^1.14.0",
-    "tailwindcss": "^3.3.3"
-  },
-  "devDependencies": {
-    "@types/node": "^18.17.1",
-    "@types/react": "^18.2.18",
-    "@types/react-dom": "^18.2.7",
-    "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.31",
-    "typescript": "^4.9.5",
-    "@testing-library/jest-dom": "^5.17.0",
-    "@testing-library/react": "^13.4.0",
-    "@testing-library/user-event": "^13.5.0",
-    "@tailwindcss/forms": "^0.5.9",
-    "@tailwindcss/typography": "^0.5.9"
-  },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test --watchAll=false",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": ["react-app", "react-app/jest"]
-  },
-  "browserslist": {
-    "production": [">0.2%", "not dead", "not op_mini all"],
-    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
-  }
-}
-EOF
 
-# Create necessary directories
-mkdir -p src/components src/components/ui src/lib src/hooks src/constants src/types
 
-# src/components/ErrorBoundary.tsx
+# Create src/components/ErrorBoundary.tsx
 print_status "Creating src/components/ErrorBoundary.tsx..."
 cat > src/components/ErrorBoundary.tsx <<'EOF'
 import React from 'react';
 
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
-}
-
 interface ErrorBoundaryState {
   hasError: boolean;
+  error: Error | null;
 }
 
-export class ErrorBoundary extends React.Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
-  constructor(props: ErrorBoundaryProps) {
+export class ErrorBoundary extends React.Component<{}, ErrorBoundaryState> {
+  constructor(props: {}) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError(_: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     // Update state so the next render shows the fallback UI.
-    return { hasError: true };
+    return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
     // You can log the error to an error reporting service here
-    console.error('Uncaught error:', error, errorInfo);
+    console.error('ErrorBoundary caught an error', error, info);
   }
 
   render() {
-    if (this.state.hasError) {
+    if (this.state.hasError && this.state.error) {
+      // You can render any custom fallback UI
       return (
         <div className="p-6 text-center">
-          <h2 className="text-2xl font-semibold mb-4">
-            Something went wrong.
-          </h2>
-          <p className="text-gray-600">
-            An unexpected error occurred. Please try refreshing the page.
-          </p>
+          <h1 className="text-2xl font-bold">Something went wrong.</h1>
+          <p className="mt-4 text-gray-600">{this.state.error.message}</p>
         </div>
       );
     }
@@ -398,21 +553,20 @@ export class ErrorBoundary extends React.Component<
 }
 EOF
 
-# src/components/ui/card.tsx
+# Create src/components/ui/card.tsx
 print_status "Creating src/components/ui/card.tsx..."
 cat > src/components/ui/card.tsx <<'EOF'
-import * as React from 'react';
+import React from 'react';
 import { cn } from '../../lib/utils';
 
-export interface CardProps
-  extends React.HTMLAttributes<HTMLDivElement> {}
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
       className={cn(
-        'rounded-lg border bg-card text-card-foreground shadow-sm',
+        'rounded-lg border bg-white shadow-sm transition-shadow hover:shadow-md',
         className
       )}
       {...props}
@@ -421,89 +575,76 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
 );
 Card.displayName = 'Card';
 
-export interface CardHeaderProps
-  extends React.HTMLAttributes<HTMLDivElement> {}
+interface CardHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
 
-export const CardHeader = React.forwardRef<
-  HTMLDivElement,
-  CardHeaderProps
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn('flex flex-col space-y-1.5 p-6', className)}
-    {...props}
-  />
-));
+export const CardHeader = React.forwardRef<HTMLDivElement, CardHeaderProps>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn('flex flex-col space-y-1.5 p-6', className)} {...props} />
+  )
+);
 CardHeader.displayName = 'CardHeader';
 
-export interface CardTitleProps
-  extends React.HTMLAttributes<HTMLHeadingElement> {}
+interface CardTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {}
 
-export const CardTitle = React.forwardRef<
-  HTMLHeadingElement,
-  CardTitleProps
->(({ className, ...props }, ref) => (
-  <h3
-    ref={ref}
-    className={cn(
-      'text-lg font-semibold leading-none tracking-tight',
-      className
-    )}
-    {...props}
-  />
-));
-CardTitle.displayName = 'CardTitle';
-
-export interface CardContentProps
-  extends React.HTMLAttributes<HTMLDivElement> {}
-
-export const CardContent = React.forwardRef<
-  HTMLDivElement,
-  CardContentProps
->(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />
-));
-CardContent.displayName = 'CardContent';
-EOF
-
-# src/components/ui/alert.tsx
-print_status "Creating src/components/ui/alert.tsx..."
-cat > src/components/ui/alert.tsx <<'EOF'
-import * as React from 'react';
-import { cn } from '../../lib/utils';
-
-export interface AlertProps
-  extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: 'default' | 'destructive';
-}
-
-const alertVariants = {
-  default: 'bg-background text-foreground',
-  destructive:
-    'text-destructive border-destructive/50 dark:border-destructive [&>svg]:text-destructive text-destructive',
-};
-
-export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
-  ({ className, variant = 'default', ...props }, ref) => (
-    <div
+export const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
+  ({ className, ...props }, ref) => (
+    <h3
       ref={ref}
-      role="alert"
-      className={cn(
-        'relative w-full rounded-lg border p-4',
-        alertVariants[variant],
-        className
-      )}
+      className={cn('text-lg font-semibold leading-none tracking-tight', className)}
       {...props}
     />
   )
 );
+CardTitle.displayName = 'CardTitle';
+
+interface CardContentProps extends React.HTMLAttributes<HTMLDivElement> {}
+
+export const CardContent = React.forwardRef<HTMLDivElement, CardContentProps>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />
+  )
+);
+CardContent.displayName = 'CardContent';
+EOF
+
+# Create src/components/ui/alert.tsx
+print_status "Creating src/components/ui/alert.tsx..."
+cat > src/components/ui/alert.tsx <<'EOF'
+import React from 'react';
+import { cn } from '../../lib/utils';
+import { AlertCircle } from 'lucide-react';
+
+interface AlertProps extends React.HTMLAttributes<HTMLDivElement> {
+  variant?: 'default' | 'destructive';
+}
+
+export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
+  ({ className, variant = 'default', children, ...props }, ref) => (
+    <div
+      ref={ref}
+      role="alert"
+      className={cn(
+        'relative w-full rounded-lg border p-4 flex items-start space-x-3',
+        variant === 'destructive'
+          ? 'border-destructive/50 text-destructive bg-destructive/10'
+          : 'bg-background text-foreground',
+        className
+      )}
+      {...props}
+    >
+      {variant === 'destructive' && (
+        <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+      )}
+      <div className="flex-1">{children}</div>
+    </div>
+  )
+);
 Alert.displayName = 'Alert';
 
-export interface AlertDescriptionProps
-  extends React.HTMLAttributes<HTMLParagraphElement> {}
+interface AlertDescriptionProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 export const AlertDescription = React.forwardRef<
-  HTMLParagraphElement,
+  HTMLDivElement,
   AlertDescriptionProps
 >(({ className, ...props }, ref) => (
   <div
@@ -515,50 +656,49 @@ export const AlertDescription = React.forwardRef<
 AlertDescription.displayName = 'AlertDescription';
 EOF
 
-# src/components/PhaseNavigation.tsx
+# Create src/components/PhaseNavigation.tsx
 print_status "Creating src/components/PhaseNavigation.tsx..."
 cat > src/components/PhaseNavigation.tsx <<'EOF'
-import React from 'react';
-import { PhaseKey, Phases } from '../types';
+import React, { memo } from 'react';
+import { PhaseKey } from '../types';
 import { cn } from '../lib/utils';
 
 interface PhaseNavigationProps {
-  phases: Phases;
+  phases: Record<PhaseKey, { title: string }>;
   activePhase: PhaseKey;
   onPhaseChange: (phase: PhaseKey) => void;
 }
 
-export const PhaseNavigation: React.FC<PhaseNavigationProps> = ({
-  phases,
-  activePhase,
-  onPhaseChange,
-}) => {
-  return (
+export const PhaseNavigation = memo<PhaseNavigationProps>(
+  ({ phases, activePhase, onPhaseChange }) => (
     <div className="flex flex-wrap md:flex-nowrap gap-2 bg-gray-100 p-2 rounded-lg">
-      {Object.entries(phases).map(([key, phase]) => (
-        <button
-          key={key}
-          onClick={() => onPhaseChange(key as PhaseKey)}
-          className={cn(
-            'flex-1 px-4 py-2 rounded-md transition-colors',
-            activePhase === key
-              ? 'bg-white shadow text-blue-600'
-              : 'hover:bg-white/50'
-          )}
-          aria-current={activePhase === key ? 'page' : undefined}
-        >
-          {phase.title}
-        </button>
-      ))}
+      {(Object.entries(phases) as [PhaseKey, { title: string }][]).map(
+        ([key, phase]) => (
+          <button
+            key={key}
+            onClick={() => onPhaseChange(key)}
+            className={cn(
+              'flex-1 px-4 py-2 rounded-md transition-colors',
+              activePhase === key
+                ? 'bg-white shadow text-blue-600'
+                : 'hover:bg-white/50'
+            )}
+            aria-current={activePhase === key ? 'page' : undefined}
+          >
+            {phase.title}
+          </button>
+        )
+      )}
     </div>
-  );
-};
+  )
+);
+PhaseNavigation.displayName = 'PhaseNavigation';
 EOF
 
-# src/components/QuestionItem.tsx
+# Create src/components/QuestionItem.tsx
 print_status "Creating src/components/QuestionItem.tsx..."
 cat > src/components/QuestionItem.tsx <<'EOF'
-import React from 'react';
+import React, { memo } from 'react';
 import { Circle, CheckCircle2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -568,12 +708,8 @@ interface QuestionItemProps {
   onToggle: () => void;
 }
 
-export const QuestionItem: React.FC<QuestionItemProps> = ({
-  question,
-  isCompleted,
-  onToggle,
-}) => {
-  return (
+export const QuestionItem = memo<QuestionItemProps>(
+  ({ question, isCompleted, onToggle }) => (
     <li
       className="flex items-start gap-3 cursor-pointer group"
       onClick={onToggle}
@@ -592,44 +728,41 @@ export const QuestionItem: React.FC<QuestionItemProps> = ({
         <Circle className="w-5 h-5 text-gray-300 group-hover:text-gray-400 mt-0.5 flex-shrink-0" />
       )}
       <span
-        className={cn(
-          'transition-colors',
-          isCompleted && 'text-gray-500 line-through'
-        )}
+        className={cn('transition-colors', isCompleted && 'text-gray-500 line-through')}
       >
         {question}
       </span>
     </li>
-  );
-};
+  )
+);
+QuestionItem.displayName = 'QuestionItem';
 EOF
 
-# src/components/TipsList.tsx
+# Create src/components/TipsList.tsx
 print_status "Creating src/components/TipsList.tsx..."
 cat > src/components/TipsList.tsx <<'EOF'
-import React from 'react';
+import React, { memo } from 'react';
 
 interface TipsListProps {
   tips: string[];
 }
 
-export const TipsList: React.FC<TipsListProps> = ({ tips }) => {
-  return (
-    <ul className="space-y-2">
-      {tips.map((tip, idx) => (
-        <li key={idx} className="flex items-center gap-2 text-sm">
-          <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-500 flex items-center justify-center flex-shrink-0">
-            {idx + 1}
-          </span>
-          <span>{tip}</span>
-        </li>
-      ))}
-    </ul>
-  );
-};
+export const TipsList = memo<TipsListProps>(({ tips }) => (
+  <ul className="space-y-2">
+    {tips.map((tip, idx) => (
+      <li key={idx} className="flex items-center gap-2 text-sm">
+        <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-500 flex items-center justify-center flex-shrink-0">
+          {idx + 1}
+        </span>
+        <span>{tip}</span>
+      </li>
+    ))}
+  </ul>
+));
+TipsList.displayName = 'TipsList';
 EOF
 
-# src/lib/utils.ts
+# Create src/lib/utils.ts
 print_status "Creating src/lib/utils.ts..."
 cat > src/lib/utils.ts <<'EOF'
 import { clsx } from 'clsx';
@@ -640,19 +773,11 @@ export function cn(...inputs: any[]) {
 }
 EOF
 
-# src/hooks/useTimer.ts
+# Create src/hooks/useTimer.ts
 print_status "Creating src/hooks/useTimer.ts..."
 cat > src/hooks/useTimer.ts <<'EOF'
 import { useState, useEffect, useCallback } from 'react';
-
-interface UseTimer {
-  timer: number;
-  isRunning: boolean;
-  startTimer: () => void;
-  pauseTimer: () => void;
-  resetTimer: () => void;
-  formatTime: (seconds: number) => string;
-}
+import { UseTimer } from '../types';
 
 export const useTimer = (initialTime: number = 3600): UseTimer => {
   const [timer, setTimer] = useState<number>(initialTime);
@@ -696,42 +821,37 @@ export const useTimer = (initialTime: number = 3600): UseTimer => {
 };
 EOF
 
-# src/hooks/usePhases.ts
+# Create src/hooks/usePhases.ts
 print_status "Creating src/hooks/usePhases.ts..."
 cat > src/hooks/usePhases.ts <<'EOF'
 import { useState, useCallback } from 'react';
 import { PHASES_DATA } from '../constants';
-import { PhaseKey, Phases, CompletedTasks, Notes } from '../types';
-
-interface UsePhases {
-  phases: Phases;
-  activePhase: PhaseKey;
-  setActivePhase: (phase: PhaseKey) => void;
-  completedTasks: CompletedTasks;
-  toggleTaskCompletion: (phaseKey: PhaseKey, questionIdx: number) => void;
-  notes: Notes;
-  handleNotesChange: (phase: PhaseKey, value: string) => void;
-}
+import { UsePhases, PhaseKey, CompletedTasks, Notes } from '../types';
 
 export const usePhases = (): UsePhases => {
   const [activePhase, setActivePhase] = useState<PhaseKey>('connect');
-  const [completedTasks, setCompletedTasks] = useState<CompletedTasks>({});
+
+  // Initialize completedTasks with all possible keys
+  const [completedTasks, setCompletedTasks] = useState<CompletedTasks>(() => {
+    const initialTasks: CompletedTasks = {};
+    Object.entries(PHASES_DATA).forEach(([phaseKey, phase]) => {
+      phase.questions.forEach((_, questionIdx) => {
+        initialTasks[`${phaseKey}-${questionIdx}`] = false;
+      });
+    });
+    return initialTasks;
+  });
+
   const [notes, setNotes] = useState<Notes>(() =>
-    Object.keys(PHASES_DATA).reduce(
-      (acc, key) => ({ ...acc, [key]: '' }),
-      {} as Notes
-    )
+    Object.keys(PHASES_DATA).reduce((acc, key) => ({ ...acc, [key]: '' }), {})
   );
 
-  const toggleTaskCompletion = useCallback(
-    (phaseKey: PhaseKey, questionIdx: number) => {
-      setCompletedTasks((prev) => ({
-        ...prev,
-        [`${phaseKey}-${questionIdx}`]: !prev[`${phaseKey}-${questionIdx}`],
-      }));
-    },
-    []
-  );
+  const toggleTaskCompletion = useCallback((phaseKey: PhaseKey, questionIdx: number) => {
+    setCompletedTasks((prev) => ({
+      ...prev,
+      [`${phaseKey}-${questionIdx}`]: !prev[`${phaseKey}-${questionIdx}`],
+    }));
+  }, []);
 
   const handleNotesChange = useCallback((phase: PhaseKey, value: string) => {
     setNotes((prev) => ({
@@ -752,7 +872,7 @@ export const usePhases = (): UsePhases => {
 };
 EOF
 
-# src/constants/index.ts
+# Create src/constants/index.ts
 print_status "Creating src/constants/index.ts..."
 cat > src/constants/index.ts <<'EOF'
 import { Phases } from '../types';
@@ -840,16 +960,9 @@ export const RED_FLAGS = [
 export const INITIAL_TIMER = 3600; // 1 hour in seconds
 EOF
 
-# src/types/index.ts
+# Create src/types/index.ts
 print_status "Creating src/types/index.ts..."
 cat > src/types/index.ts <<'EOF'
-export type PhaseKey =
-  | 'connect'
-  | 'explore'
-  | 'structure'
-  | 'document'
-  | 'grow';
-
 export interface Phase {
   title: string;
   duration: string;
@@ -868,9 +981,29 @@ export interface CompletedTasks {
 export interface Notes {
   [key: string]: string;
 }
+
+export type PhaseKey = 'connect' | 'explore' | 'structure' | 'document' | 'grow';
+
+// Custom hook types
+export interface UseTimer {
+  timer: number;
+  isRunning: boolean;
+  startTimer: () => void;
+  pauseTimer: () => void;
+  resetTimer: () => void;
+  formatTime: (seconds: number) => string;
+}
+
+export interface UsePhases {
+  phases: Phases;
+  activePhase: PhaseKey;
+  setActivePhase: (phase: PhaseKey) => void;
+  completedTasks: CompletedTasks;
+  toggleTaskCompletion: (phaseKey: PhaseKey, questionIdx: number) => void;
+  notes: Notes;
+  handleNotesChange: (phase: PhaseKey, value: string) => void;
+}
 EOF
-
-
 # Final success message
 print_success "Setup complete! You can now run 'npm start' in the project directory to start the application."
 print_status "Navigate to $PROJECT_DIR and run 'npm start' to begin."
