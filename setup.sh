@@ -1,16 +1,23 @@
 #!/bin/bash
 
-# Create a new directory for the project
-mkdir one-on-one-tool
+# Exit immediately if a command exits with a non-zero status
+set -e
+
+# Create a new directory for the project and navigate into it
+mkdir -p one-on-one-tool
 cd one-on-one-tool
 
 # Initialize a new React app
-npx create-react-app .
+npx create-react-app . --template cra-template-pwa
 
 # Install required dependencies
-npm install react-draft-wysiwyg draft-js draftjs-to-html
+npm install react-draft-wysiwyg draft-js draftjs-to-html draft-js-export-html
 npm install lucide-react
 npm install tailwindcss postcss autoprefixer
+npm install @headlessui/react
+npm install @heroicons/react
+
+# Initialize Tailwind CSS
 npx tailwindcss init -p
 
 # Update Tailwind CSS configuration
@@ -22,39 +29,30 @@ echo "module.exports = {
   plugins: [],
 };" > tailwind.config.js
 
-# Create the main application files
-rm -f src/App.js src/App.css src/index.css src/logo.svg
+# Remove default files
+rm -f src/App.css src/index.css src/logo.svg src/App.test.js src/reportWebVitals.js src/setupTests.js
 
 # Create index.css
 echo "@tailwind base;
 @tailwind components;
 @tailwind utilities;" > src/index.css
 
-# Create App.js
-cat <<EOL > src/App.js
-// Paste the full code for App.js here
-EOL
+# Create index.js
+echo "import React from 'react';
+import ReactDOM from 'react-dom';
+import App from './App';
+import './index.css';
 
-# Create additional components
-mkdir src/components
+ReactDOM.render(<App />, document.getElementById('root'));" > src/index.js
+
+# Create components directory
+mkdir -p src/components
+
+# Create base files
+touch src/App.js
 touch src/components/RichTextEditor.js
 touch src/components/TagInput.js
 touch src/components/CheatSheetModal.js
 
-# Create RichTextEditor.js
-cat <<EOL > src/components/RichTextEditor.js
-// Paste the full code for RichTextEditor.js here
-EOL
-
-# Create TagInput.js
-cat <<EOL > src/components/TagInput.js
-// Paste the full code for TagInput.js here
-EOL
-
-# Create CheatSheetModal.js
-cat <<EOL > src/components/CheatSheetModal.js
-// Paste the full code for CheatSheetModal.js here
-EOL
-
-# Start the development server
-npm start
+# Start the development server in the background
+npm start &
