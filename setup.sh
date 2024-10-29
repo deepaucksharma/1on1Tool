@@ -2,359 +2,166 @@
 
 set -e
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-print_status() {
-    echo -e "${BLUE}==>${NC} $1"
-}
-
-print_success() {
-    echo -e "${GREEN}==>${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}==>${NC} $1"
-}
-
-cleanup() {
-    if [ -d "$PROJECT_DIR" ]; then
-        rm -rf "$PROJECT_DIR"
-        print_status "Cleaned up project directory."
-    fi
-    exit 1
-}
-
-trap 'print_error "An error occurred. Cleaning up..."; cleanup' ERR
-
-check_command() {
-    if ! command -v "$1" &> /dev/null; then
-        print_error "Required command '$1' is not installed."
-        exit 1
-    fi
-}
-
-check_node_version() {
-    local min_version="16.0.0"
-    local max_version="20.0.0"
-    local current_version=$(node -v | cut -d 'v' -f 2)
-
-    if [[ "$(printf '%s\n' "$min_version" "$current_version" | sort -V | head -n1)" != "$min_version" ]] || \
-       [[ "$(printf '%s\n' "$max_version" "$current_version" | sort -V | tail -n1)" != "$max_version" ]]; then
-        print_error "Node.js version must be >= $min_version and <= $max_version. Current version: $current_version"
-        exit 1
-    fi
-}
-
-npm_permissions_check() {
-    if ! npm cache verify &>/dev/null; then
-        print_error "NPM does not have sufficient permissions. Please fix your npm permissions."
-        exit 1
-    fi
-}
-
-check_command node
-check_node_version
-check_command npm
-npm_permissions_check
-
-if lsof -i tcp:3000 | grep LISTEN; then
-    print_error "Port 3000 is already in use. Please close any running applications on this port."
-    exit 1
-fi
-
 PROJECT_DIR="$HOME/one-on-one-tool"
-print_status "Setting up project in $PROJECT_DIR"
 
+# Remove existing project directory if user confirms
 if [ -d "$PROJECT_DIR" ]; then
     read -p "Project directory already exists. Do you want to delete it and start fresh? [y/N]: " confirm
     if [[ $confirm =~ ^[Yy]$ ]]; then
-        rm -rf "$PROJECT_DIR" || {
-            print_error "Failed to delete existing project directory"
-            exit 1
-        }
+        rm -rf "$PROJECT_DIR"
     else
-        print_error "Installation aborted by user."
+        echo "Installation aborted by user."
         exit 1
     fi
 fi
 
+# Create project directory and navigate into it
 mkdir -p "$PROJECT_DIR"
+cd "$PROJECT_DIR"
 
-cd "$PROJECT_DIR" || {
-    print_error "Failed to change directory to $PROJECT_DIR"
-    exit 1
+# Initialize a new npm project
+npm init -y
+
+# Install core dependencies
+npm install react@18.2.0 react-dom@18.2.0
+
+# Install development dependencies
+npm install --save-dev typescript@5.0.4 @types/react@18.0.28 @types/react-dom@18.0.11 \
+webpack@5.88.1 webpack-cli@5.1.4 webpack-dev-server@4.15.1 ts-loader@9.4.3 \
+html-webpack-plugin@5.5.3 @babel/core@7.22.9 @babel/preset-env@7.22.9 \
+@babel/preset-react@7.22.5 @babel/preset-typescript@7.22.5 babel-loader@9.1.3 \
+style-loader@3.3.3 css-loader@6.8.1
+
+# Create tsconfig.json for TypeScript configuration
+cat > tsconfig.json <<'EOF'
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowJs": true,
+    "noEmit": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
 }
+EOF
 
-print_status "Creating new React project..."
-npx create-react-app@5.0.1 . --template typescript
-
-print_status "Installing dependencies..."
-npm install \
-    @headlessui/react \
-    @radix-ui/react-alert-dialog \
-    @radix-ui/react-slot \
-    class-variance-authority \
-    clsx \
-    lucide-react \
-    tailwind-merge \
-    tailwindcss@latest \
-    @tailwindcss/forms \
-    @tailwindcss/typography \
-    react@18.2.0 \
-    react-dom@18.2.0
-
-print_status "Installing dev dependencies..."
-npm install --save-dev \
-    @types/lucide-react \
-    @types/node@18.17.1 \
-    @types/react@18.2.18 \
-    @types/react-dom@18.2.7 \
-    autoprefixer \
-    typescript@4.9.5 \
-    eslint \
-    eslint-config-react-app \
-    eslint-plugin-react-hooks \
-    prettier \
-    eslint-config-prettier \
-    eslint-plugin-prettier
-
-print_status "Setting up Tailwind CSS..."
-npx tailwindcss init
-
-print_status "Configuring Tailwind CSS..."
-cat > tailwind.config.js <<'EOF'
-const { fontFamily } = require('tailwindcss/defaultTheme')
+# Create webpack.config.js
+cat > webpack.config.js <<'EOF'
+const path = require('path');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
-  content: [
-    './src/**/*.{js,jsx,ts,tsx}',
-  ],
-  darkMode: 'class',
-  theme: {
-    extend: {
-      fontFamily: {
-        sans: [...fontFamily.sans],
+  entry: './src/index.tsx',
+  mode: 'development',
+  devtool: 'source-map', // Added for easier debugging
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: 'bundle.js',
+    clean: true
+  },
+  resolve: {
+    extensions: ['.tsx', '.ts', '.js'],
+  },
+  module: {
+    rules: [
+      // TypeScript and Babel loader
+      {
+        test: /\.(ts|tsx)$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: [
+              '@babel/preset-env',
+              '@babel/preset-react',
+              '@babel/preset-typescript'
+            ]
+          }
+        }
       },
-      colors: {
-        border: 'hsl(var(--border) / <alpha-value>)',
-        input: 'hsl(var(--input) / <alpha-value>)',
-        ring: 'hsl(var(--ring) / <alpha-value>)',
-        background: 'hsl(var(--background) / <alpha-value>)',
-        foreground: 'hsl(var(--foreground) / <alpha-value>)',
-        primary: {
-          DEFAULT: 'hsl(var(--primary) / <alpha-value>)',
-          foreground: 'hsl(var(--primary-foreground) / <alpha-value>)',
-        },
-        destructive: {
-          DEFAULT: 'hsl(var(--destructive) / <alpha-value>)',
-          foreground: 'hsl(var(--destructive-foreground) / <alpha-value>)',
-        },
-        muted: {
-          DEFAULT: 'hsl(var(--muted) / <alpha-value>)',
-          foreground: 'hsl(var(--muted-foreground) / <alpha-value>)',
-        },
-        accent: {
-          DEFAULT: 'hsl(var(--accent) / <alpha-value>)',
-          foreground: 'hsl(var(--accent-foreground) / <alpha-value>)',
-        },
-        popover: {
-          DEFAULT: 'hsl(var(--popover) / <alpha-value>)',
-          foreground: 'hsl(var(--popover-foreground) / <alpha-value>)',
-        },
-        card: {
-          DEFAULT: 'hsl(var(--card) / <alpha-value>)',
-          foreground: 'hsl(var(--card-foreground) / <alpha-value>)',
-        },
-      },
-      borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
-      },
-    },
+      // CSS loader
+      {
+        test: /\.css$/,
+        use: ['style-loader', 'css-loader'],
+      }
+    ]
   },
   plugins: [
-    require('@tailwindcss/forms'),
-    require('@tailwindcss/typography'),
+    new HtmlWebpackPlugin({
+      template: './public/index.html',
+    }),
   ],
-}
-EOF
-
-print_status "Creating index.css..."
-cat > src/index.css <<'EOF'
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --ring: 215 20.2% 65.1%;
-
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --ring: 212.7 26.8% 83.9%;
-  }
-
-  body {
-    @apply bg-background text-foreground;
-    font-family: sans-serif;
-  }
-}
-EOF
-
-print_status "Updating index.tsx..."
-cat > src/index.tsx <<'EOF'
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import './index.css';
-import App from './App';
-import { ErrorBoundary } from './components/ErrorBoundary';
-
-const container = document.getElementById('root');
-if (!container) throw new Error('Failed to find the root element');
-const root = createRoot(container);
-
-root.render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>
-);
-EOF
-
-rm -f src/App.css src/App.test.tsx src/logo.svg src/reportWebVitals.ts src/setupTests.ts
-
-mkdir -p src/components/ui src/lib src/hooks src/constants src/types src/components
-
-print_status "Creating ESLint configuration..."
-cat > .eslintrc.js <<'EOF'
-module.exports = {
-  extends: ['react-app', 'react-app/jest', 'plugin:react-hooks/recommended', 'prettier'],
-  plugins: ['react-hooks', 'prettier'],
-  rules: {
-    'prettier/prettier': 'error',
+  devServer: {
+    static: {
+      directory: path.join(__dirname, 'public'),
+    },
+    port: 3000,
+    open: true,
   },
 };
 EOF
 
-print_status "Creating Prettier configuration..."
-cat > .prettierrc <<'EOF'
-{
-  "semi": true,
-  "singleQuote": true,
-  "printWidth": 80,
-  "tabWidth": 2,
-  "trailingComma": "es5"
+# Create .gitignore
+cat > .gitignore <<'EOF'
+node_modules/
+dist/
+.DS_Store
+EOF
+
+# Create directories for the project structure
+mkdir -p src/components src/hooks src/constants src/types public
+
+# Create public/index.html
+cat > public/index.html <<'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>One-on-One Tool</title>
+</head>
+<body>
+  <div id="root"></div>
+</body>
+</html>
+EOF
+
+# Create src/index.tsx
+cat > src/index.tsx <<'EOF'
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  const root = createRoot(rootElement);
+  root.render(<App />);
+} else {
+  console.error('Root element not found!');
 }
 EOF
 
-print_status "Updating tsconfig.json..."
-cat > tsconfig.json <<'EOF'
-{
-  "compilerOptions": {
-    "target": "ES2020",
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "ESNext",
-    "moduleResolution": "Node",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "react-jsx"
-  },
-  "include": ["src"]
-}
-EOF
-
-print_status "Creating .env file..."
-cat > .env <<'EOF'
-# You can set custom environment variables here
-EOF
-
-print_status "Creating global types declaration..."
-cat > src/global.d.ts <<'EOF'
-declare module '*.svg' {
-  const content: React.FunctionComponent<React.SVGAttributes<SVGElement>>;
-  export default content;
-}
-EOF
-
-print_status "Creating src/App.tsx..."
+# Create src/App.tsx
 cat > src/App.tsx <<'EOF'
-import React, { useMemo } from 'react';
-import { Clock, AlertCircle } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from './components/ui/card';
-import { Alert, AlertDescription } from './components/ui/alert';
+import React from 'react';
 import { PhaseNavigation } from './components/PhaseNavigation';
 import { QuestionItem } from './components/QuestionItem';
 import { TipsList } from './components/TipsList';
 import { useTimer } from './hooks/useTimer';
 import { usePhases } from './hooks/usePhases';
 import { RED_FLAGS, INITIAL_TIMER } from './constants';
-import type { PhaseKey } from './types';
 
 const App: React.FC = () => {
   const {
     timer,
-    isRunning: isTimerRunning,
+    isRunning,
     startTimer,
     pauseTimer,
     resetTimer,
@@ -373,56 +180,15 @@ const App: React.FC = () => {
 
   const currentPhase = phases[activePhase];
 
-  const completionPercentage = useMemo(() => {
-    const total = Object.keys(phases).reduce(
-      (acc, phase) => acc + phases[phase as PhaseKey].questions.length,
-      0
-    );
-    const completed = Object.values(completedTasks).filter(Boolean).length;
-    return Math.round((completed / total) * 100);
-  }, [phases, completedTasks]);
-
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
-      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Clock className="w-5 h-5" />
-            <span className="font-mono text-xl">{formatTime(timer)}</span>
-          </div>
-          <div className="space-x-2">
-            {!isTimerRunning ? (
-              <button
-                onClick={startTimer}
-                className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-              >
-                Start
-              </button>
-            ) : (
-              <button
-                onClick={pauseTimer}
-                className="px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
-              >
-                Pause
-              </button>
-            )}
-            <button
-              onClick={resetTimer}
-              className="px-3 py-1 bg-gray-500 text-white rounded-md hover:bg-gray-600"
-            >
-              Reset
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span>Progress: {completionPercentage}%</span>
-          <div className="w-32 h-2 bg-gray-200 rounded-full">
-            <div
-              className="h-full bg-blue-500 rounded-full"
-              style={{ width: `${completionPercentage}%` }}
-            />
-          </div>
-        </div>
+    <div style={{ padding: '20px' }}>
+      <h1>One-on-One Tool</h1>
+      <div>
+        <span>Timer: {formatTime(timer)}</span>
+        <button onClick={isRunning ? pauseTimer : startTimer}>
+          {isRunning ? 'Pause' : 'Start'}
+        </button>
+        <button onClick={resetTimer}>Reset</button>
       </div>
 
       <PhaseNavigation
@@ -431,55 +197,38 @@ const App: React.FC = () => {
         onPhaseChange={setActivePhase}
       />
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {currentPhase.title} ({currentPhase.duration})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <ul className="space-y-3">
-              {currentPhase.questions.map((question, idx) => (
-                <QuestionItem
-                  key={idx}
-                  question={question}
-                  isCompleted={!!completedTasks[`${activePhase}-${idx}`]}
-                  onToggle={() => toggleTaskCompletion(activePhase, idx)}
-                />
-              ))}
-            </ul>
-            <textarea
-              value={notes[activePhase]}
-              onChange={(e) => handleNotesChange(activePhase, e.target.value)}
-              placeholder="Add notes..."
-              className="w-full mt-4 p-2 border rounded-md min-h-[100px]"
+      <div>
+        <h2>{currentPhase.title} ({currentPhase.duration})</h2>
+        <ul>
+          {currentPhase.questions.map((question, idx) => (
+            <QuestionItem
+              key={idx}
+              question={question}
+              isCompleted={Boolean(completedTasks[\`\${activePhase}-\${idx}\`])}
+              onToggle={() => toggleTaskCompletion(activePhase, idx)}
             />
-          </CardContent>
-        </Card>
+          ))}
+        </ul>
+        <textarea
+          value={notes[activePhase]}
+          onChange={(e) => handleNotesChange(activePhase, e.target.value)}
+          placeholder="Add notes..."
+          style={{ width: '100%', height: '100px' }}
+        />
+      </div>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Tips</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <TipsList tips={currentPhase.tips} />
-            </CardContent>
-          </Card>
+      <div>
+        <h3>Tips</h3>
+        <TipsList tips={currentPhase.tips} />
+      </div>
 
-          <Alert variant="destructive">
-            <AlertCircle className="w-4 h-4" />
-            <AlertDescription className="mt-2">
-              <h4 className="font-semibold mb-2">Red Flags to Watch For:</h4>
-              <ul className="list-disc pl-4 space-y-1">
-                {RED_FLAGS.map((flag, idx) => (
-                  <li key={idx}>{flag}</li>
-                ))}
-              </ul>
-            </AlertDescription>
-          </Alert>
-        </div>
+      <div>
+        <h3>Red Flags to Watch For:</h3>
+        <ul>
+          {RED_FLAGS.map((flag, idx) => (
+            <li key={idx}>{flag}</li>
+          ))}
+        </ul>
       </div>
     </div>
   );
@@ -488,243 +237,29 @@ const App: React.FC = () => {
 export default App;
 EOF
 
-# Continue creating the necessary component and hook files, ensuring all imports are correctly referenced using relative paths. For brevity, here is an example of one of the components:
-
-print_status "Creating src/components/ui/card.tsx..."
-cat > src/components/ui/card.tsx <<'EOF'
-import React from 'react';
-
-interface CardProps extends React.HTMLAttributes<HTMLDivElement> {}
-
-export const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={`rounded-lg border bg-white shadow-sm transition-shadow hover:shadow-md ${className}`}
-      {...props}
-    />
-  )
-);
-Card.displayName = 'Card';
-
-interface CardHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
-
-export const CardHeader = React.forwardRef<HTMLDivElement, CardHeaderProps>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={`flex flex-col space-y-1.5 p-6 ${className}`} {...props} />
-  )
-);
-CardHeader.displayName = 'CardHeader';
-
-interface CardTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {}
-
-export const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
-  ({ className, ...props }, ref) => (
-    <h3
-      ref={ref}
-      className={`text-lg font-semibold leading-none tracking-tight ${className}`}
-      {...props}
-    />
-  )
-);
-CardTitle.displayName = 'CardTitle';
-
-interface CardContentProps extends React.HTMLAttributes<HTMLDivElement> {}
-
-export const CardContent = React.forwardRef<HTMLDivElement, CardContentProps>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={`p-6 pt-0 ${className}`} {...props} />
-  )
-);
-CardContent.displayName = 'CardContent';
-EOF
-
-
-# Create src/components/ui/alert.tsx
-print_status "Creating src/components/ui/alert.tsx..."
-cat > src/components/ui/alert.tsx <<'EOF'
-import React from 'react';
-import { cn } from '../../lib/utils';
-import { AlertCircle } from 'lucide-react';
-
-interface AlertProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: 'default' | 'destructive';
-}
-
-export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
-  ({ className, variant = 'default', children, ...props }, ref) => (
-    <div
-      ref={ref}
-      role="alert"
-      className={cn(
-        'relative w-full rounded-lg border p-4 flex items-start space-x-3',
-        variant === 'destructive'
-          ? 'border-destructive/50 text-destructive bg-destructive/10'
-          : 'bg-background text-foreground',
-        className
-      )}
-      {...props}
-    >
-      {variant === 'destructive' && (
-        <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
-      )}
-      <div className="flex-1">{children}</div>
-    </div>
-  )
-);
-Alert.displayName = 'Alert';
-
-interface AlertDescriptionProps extends React.HTMLAttributes<HTMLDivElement> {}
-
-export const AlertDescription = React.forwardRef<
-  HTMLDivElement,
-  AlertDescriptionProps
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn('text-sm [&_p]:leading-relaxed', className)}
-    {...props}
-  />
-));
-AlertDescription.displayName = 'AlertDescription';
-EOF
-
-# Create src/components/PhaseNavigation.tsx
-print_status "Creating src/components/PhaseNavigation.tsx..."
-cat > src/components/PhaseNavigation.tsx <<'EOF'
-import React, { memo } from 'react';
-import { PhaseKey } from '../types';
-import { cn } from '../lib/utils';
-
-interface PhaseNavigationProps {
-  phases: Record<PhaseKey, { title: string }>;
-  activePhase: PhaseKey;
-  onPhaseChange: (phase: PhaseKey) => void;
-}
-
-export const PhaseNavigation = memo<PhaseNavigationProps>(
-  ({ phases, activePhase, onPhaseChange }) => (
-    <div className="flex flex-wrap md:flex-nowrap gap-2 bg-gray-100 p-2 rounded-lg">
-      {(Object.entries(phases) as [PhaseKey, { title: string }][]).map(
-        ([key, phase]) => (
-          <button
-            key={key}
-            onClick={() => onPhaseChange(key)}
-            className={cn(
-              'flex-1 px-4 py-2 rounded-md transition-colors',
-              activePhase === key
-                ? 'bg-white shadow text-blue-600'
-                : 'hover:bg-white/50'
-            )}
-            aria-current={activePhase === key ? 'page' : undefined}
-          >
-            {phase.title}
-          </button>
-        )
-      )}
-    </div>
-  )
-);
-PhaseNavigation.displayName = 'PhaseNavigation';
-EOF
-
-# Create src/components/QuestionItem.tsx
-print_status "Creating src/components/QuestionItem.tsx..."
-cat > src/components/QuestionItem.tsx <<'EOF'
-import React, { memo } from 'react';
-import { Circle, CheckCircle2 } from 'lucide-react';
-import { cn } from '../lib/utils';
-
-interface QuestionItemProps {
-  question: string;
-  isCompleted: boolean;
-  onToggle: () => void;
-}
-
-export const QuestionItem = memo<QuestionItemProps>(
-  ({ question, isCompleted, onToggle }) => (
-    <li
-      className="flex items-start gap-3 cursor-pointer group"
-      onClick={onToggle}
-      role="checkbox"
-      aria-checked={isCompleted}
-      tabIndex={0}
-      onKeyPress={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          onToggle();
-        }
-      }}
-    >
-      {isCompleted ? (
-        <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-      ) : (
-        <Circle className="w-5 h-5 text-gray-300 group-hover:text-gray-400 mt-0.5 flex-shrink-0" />
-      )}
-      <span
-        className={cn('transition-colors', isCompleted && 'text-gray-500 line-through')}
-      >
-        {question}
-      </span>
-    </li>
-  )
-);
-QuestionItem.displayName = 'QuestionItem';
-EOF
-
-# Create src/components/TipsList.tsx
-print_status "Creating src/components/TipsList.tsx..."
-cat > src/components/TipsList.tsx <<'EOF'
-import React, { memo } from 'react';
-
-interface TipsListProps {
-  tips: string[];
-}
-
-export const TipsList = memo<TipsListProps>(({ tips }) => (
-  <ul className="space-y-2">
-    {tips.map((tip, idx) => (
-      <li key={idx} className="flex items-center gap-2 text-sm">
-        <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-500 flex items-center justify-center flex-shrink-0">
-          {idx + 1}
-        </span>
-        <span>{tip}</span>
-      </li>
-    ))}
-  </ul>
-));
-TipsList.displayName = 'TipsList';
-EOF
-
-# Create src/lib/utils.ts
-print_status "Creating src/lib/utils.ts..."
-cat > src/lib/utils.ts <<'EOF'
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-export function cn(...inputs: any[]) {
-  return twMerge(clsx(inputs));
-}
-EOF
-
 # Create src/hooks/useTimer.ts
-print_status "Creating src/hooks/useTimer.ts..."
 cat > src/hooks/useTimer.ts <<'EOF'
 import { useState, useEffect, useCallback } from 'react';
-import { UseTimer } from '../types';
 
-export const useTimer = (initialTime: number = 3600): UseTimer => {
+export const useTimer = (initialTime: number = 3600) => {
   const [timer, setTimer] = useState<number>(initialTime);
   const [isRunning, setIsRunning] = useState<boolean>(false);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let intervalId: number | undefined;
     if (isRunning && timer > 0) {
-      interval = setInterval(() => {
-        setTimer((prev) => prev - 1);
+      intervalId = window.setInterval(() => {
+        setTimer((prev) => {
+          if (prev <= 1) {
+            setIsRunning(false);
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
     }
     return () => {
-      if (interval) clearInterval(interval);
+      if (intervalId !== undefined) window.clearInterval(intervalId);
     };
   }, [isRunning, timer]);
 
@@ -738,51 +273,30 @@ export const useTimer = (initialTime: number = 3600): UseTimer => {
   const formatTime = useCallback((seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs
-      .toString()
-      .padStart(2, '0')}`;
+    return \`\${mins.toString().padStart(2, '0')}:\${secs.toString().padStart(2, '0')}\`;
   }, []);
 
-  return {
-    timer,
-    isRunning,
-    startTimer,
-    pauseTimer,
-    resetTimer,
-    formatTime,
-  };
+  return { timer, isRunning, startTimer, pauseTimer, resetTimer, formatTime };
 };
 EOF
 
 # Create src/hooks/usePhases.ts
-print_status "Creating src/hooks/usePhases.ts..."
 cat > src/hooks/usePhases.ts <<'EOF'
 import { useState, useCallback } from 'react';
 import { PHASES_DATA } from '../constants';
-import { UsePhases, PhaseKey, CompletedTasks, Notes } from '../types';
+import { PhaseKey, CompletedTasks, Notes } from '../types';
 
-export const usePhases = (): UsePhases => {
+export const usePhases = () => {
   const [activePhase, setActivePhase] = useState<PhaseKey>('connect');
-
-  // Initialize completedTasks with all possible keys
-  const [completedTasks, setCompletedTasks] = useState<CompletedTasks>(() => {
-    const initialTasks: CompletedTasks = {};
-    Object.entries(PHASES_DATA).forEach(([phaseKey, phase]) => {
-      phase.questions.forEach((_, questionIdx) => {
-        initialTasks[`${phaseKey}-${questionIdx}`] = false;
-      });
-    });
-    return initialTasks;
-  });
-
+  const [completedTasks, setCompletedTasks] = useState<CompletedTasks>({});
   const [notes, setNotes] = useState<Notes>(() =>
-    Object.keys(PHASES_DATA).reduce((acc, key) => ({ ...acc, [key]: '' }), {})
+    Object.keys(PHASES_DATA).reduce((acc, key) => ({ ...acc, [key]: '' }), {} as Notes)
   );
 
   const toggleTaskCompletion = useCallback((phaseKey: PhaseKey, questionIdx: number) => {
     setCompletedTasks((prev) => ({
       ...prev,
-      [`${phaseKey}-${questionIdx}`]: !prev[`${phaseKey}-${questionIdx}`],
+      [\`\${phaseKey}-\${questionIdx}\`]: !prev[\`\${phaseKey}-\${questionIdx}\`],
     }));
   }, []);
 
@@ -805,8 +319,102 @@ export const usePhases = (): UsePhases => {
 };
 EOF
 
+# Create src/components/PhaseNavigation.tsx
+cat > src/components/PhaseNavigation.tsx <<'EOF'
+import React from 'react';
+import { PhaseKey } from '../types';
+
+interface PhaseNavigationProps {
+  phases: Record<PhaseKey, { title: string }>;
+  activePhase: PhaseKey;
+  onPhaseChange: (phase: PhaseKey) => void;
+}
+
+export const PhaseNavigation: React.FC<PhaseNavigationProps> = ({
+  phases,
+  activePhase,
+  onPhaseChange,
+}) => (
+  <div style={{ marginBottom: '20px' }}>
+    {Object.entries(phases).map(([key, phase]) => (
+      <button
+        key={key}
+        onClick={() => onPhaseChange(key as PhaseKey)}
+        style={{
+          margin: '0 10px',
+          padding: '5px 10px',
+          backgroundColor: activePhase === key ? '#007bff' : '#ffffff',
+          color: activePhase === key ? '#ffffff' : '#000000',
+          border: '1px solid #007bff',
+          borderRadius: '4px',
+          cursor: 'pointer',
+        }}
+      >
+        {phase.title}
+      </button>
+    ))}
+  </div>
+);
+EOF
+
+# Create src/components/QuestionItem.tsx
+cat > src/components/QuestionItem.tsx <<'EOF'
+import React from 'react';
+
+interface QuestionItemProps {
+  question: string;
+  isCompleted: boolean;
+  onToggle: () => void;
+}
+
+export const QuestionItem: React.FC<QuestionItemProps> = ({
+  question,
+  isCompleted,
+  onToggle,
+}) => (
+  <li
+    style={{
+      listStyle: 'none',
+      margin: '10px 0',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+    }}
+    onClick={onToggle}
+  >
+    <input
+      type="checkbox"
+      checked={isCompleted}
+      readOnly
+      style={{ marginRight: '10px' }}
+    />
+    <span style={{ textDecoration: isCompleted ? 'line-through' : 'none' }}>
+      {question}
+    </span>
+  </li>
+);
+EOF
+
+# Create src/components/TipsList.tsx
+cat > src/components/TipsList.tsx <<'EOF'
+import React from 'react';
+
+interface TipsListProps {
+  tips: string[];
+}
+
+export const TipsList: React.FC<TipsListProps> = ({ tips }) => (
+  <ul style={{ paddingLeft: '20px' }}>
+    {tips.map((tip, idx) => (
+      <li key={idx} style={{ margin: '5px 0' }}>
+        {tip}
+      </li>
+    ))}
+  </ul>
+);
+EOF
+
 # Create src/constants/index.ts
-print_status "Creating src/constants/index.ts..."
 cat > src/constants/index.ts <<'EOF'
 import { Phases } from '../types';
 
@@ -890,11 +498,10 @@ export const RED_FLAGS = [
   'Lack of engagement',
 ];
 
-export const INITIAL_TIMER = 3600; // 1 hour in seconds
+export const INITIAL_TIMER = 3600; // 60 minutes in seconds
 EOF
 
 # Create src/types/index.ts
-print_status "Creating src/types/index.ts..."
 cat > src/types/index.ts <<'EOF'
 export interface Phase {
   title: string;
@@ -903,40 +510,20 @@ export interface Phase {
   tips: string[];
 }
 
-export interface Phases {
-  [key: string]: Phase;
-}
-
-export interface CompletedTasks {
-  [key: string]: boolean;
-}
-
-export interface Notes {
-  [key: string]: string;
-}
-
 export type PhaseKey = 'connect' | 'explore' | 'structure' | 'document' | 'grow';
 
-// Custom hook types
-export interface UseTimer {
-  timer: number;
-  isRunning: boolean;
-  startTimer: () => void;
-  pauseTimer: () => void;
-  resetTimer: () => void;
-  formatTime: (seconds: number) => string;
-}
+export type Phases = Record<PhaseKey, Phase>;
 
-export interface UsePhases {
-  phases: Phases;
-  activePhase: PhaseKey;
-  setActivePhase: (phase: PhaseKey) => void;
-  completedTasks: CompletedTasks;
-  toggleTaskCompletion: (phaseKey: PhaseKey, questionIdx: number) => void;
-  notes: Notes;
-  handleNotesChange: (phase: PhaseKey, value: string) => void;
-}
+export type CompletedTasks = Record<string, boolean>;
+
+export type Notes = Record<PhaseKey, string>;
 EOF
-# Final success message
-print_success "Setup complete! You can now run 'npm start' in the project directory to start the application."
-print_status "Navigate to $PROJECT_DIR and run 'npm start' to begin."
+
+# Update package.json scripts
+npm pkg set scripts.start="webpack serve --mode development"
+npm pkg set scripts.build="webpack --mode production"
+
+# Install dependencies
+npm install
+
+echo "Setup complete! You can now run 'npm start' in the project directory to start the application."
