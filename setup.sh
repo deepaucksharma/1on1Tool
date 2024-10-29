@@ -32,6 +32,9 @@ html-webpack-plugin@5.5.3 @babel/core@7.22.9 @babel/preset-env@7.22.9 \
 @babel/preset-react@7.22.5 @babel/preset-typescript@7.22.5 babel-loader@9.1.3 \
 style-loader@3.3.3 css-loader@6.8.1
 
+# Install additional dependencies for new features
+npm install react-quill@2.0.0-beta.4
+
 # Create tsconfig.json for TypeScript configuration
 cat > tsconfig.json <<'EOF'
 {
@@ -150,13 +153,15 @@ EOF
 
 # Create src/App.tsx
 cat > src/App.tsx <<'EOF'
-import React from 'react';
+import React, { useEffect } from 'react';
 import { PhaseNavigation } from './components/PhaseNavigation';
 import { QuestionItem } from './components/QuestionItem';
 import { TipsList } from './components/TipsList';
 import { useTimer } from './hooks/useTimer';
 import { usePhases } from './hooks/usePhases';
 import { RED_FLAGS, INITIAL_TIMER } from './constants';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 const App: React.FC = () => {
   const {
@@ -176,60 +181,136 @@ const App: React.FC = () => {
     toggleTaskCompletion,
     notes,
     handleNotesChange,
+    loadMeetings,
+    saveMeeting,
+    loadCurrentMeetingData,
+    meetings,
+    currentMeetingIndex,
+    setCurrentMeetingIndex,
+    teamMember,
+    setTeamMember,
   } = usePhases();
 
-  const currentPhase = phases[activePhase];
+  useEffect(() => {
+    loadMeetings();
+  }, [teamMember]);
+
+  useEffect(() => {
+    loadCurrentMeetingData();
+  }, [currentMeetingIndex]);
 
   return (
     <div style={{ padding: '20px' }}>
       <h1>One-on-One Tool</h1>
+
+      {/* Team Member Selection */}
       <div>
-        <span>Timer: {formatTime(timer)}</span>
-        <button onClick={isRunning ? pauseTimer : startTimer}>
-          {isRunning ? 'Pause' : 'Start'}
-        </button>
-        <button onClick={resetTimer}>Reset</button>
+        <label>
+          Select Team Member:
+          <input
+            type="text"
+            value={teamMember}
+            onChange={(e) => setTeamMember(e.target.value)}
+            style={{ marginLeft: '10px' }}
+          />
+        </label>
       </div>
 
-      <PhaseNavigation
-        phases={phases}
-        activePhase={activePhase}
-        onPhaseChange={setActivePhase}
-      />
-
+      {/* Previous Meetings */}
       <div>
-        <h2>{currentPhase.title} ({currentPhase.duration})</h2>
+        <h2>Past Meetings</h2>
         <ul>
-          {currentPhase.questions.map((question, idx) => (
-            <QuestionItem
-              key={idx}
-              question={question}
-              isCompleted={Boolean(completedTasks[\`\${activePhase}-\${idx}\`])}
-              onToggle={() => toggleTaskCompletion(activePhase, idx)}
-            />
+          {meetings.map((meeting, index) => (
+            <li key={index}>
+              <button onClick={() => setCurrentMeetingIndex(index)}>
+                {new Date(meeting.date).toLocaleString()}
+              </button>
+            </li>
           ))}
         </ul>
-        <textarea
-          value={notes[activePhase]}
-          onChange={(e) => handleNotesChange(activePhase, e.target.value)}
-          placeholder="Add notes..."
-          style={{ width: '100%', height: '100px' }}
+      </div>
+
+      {/* Summary of Selected Meeting */}
+      {currentMeetingIndex >= 0 && meetings[currentMeetingIndex] && (
+        <div>
+          <h2>Summary of Selected Meeting</h2>
+          <p>Date: {new Date(meetings[currentMeetingIndex].date).toLocaleString()}</p>
+          {/* Display notes */}
+          {Object.entries(meetings[currentMeetingIndex].phases).map(([phaseKey, phaseNote]) => (
+            <div key={phaseKey}>
+              <h3>{phases[phaseKey].title}</h3>
+              <div dangerouslySetInnerHTML={{ __html: phaseNote }} />
+            </div>
+          ))}
+          {/* Display action items if any */}
+          {meetings[currentMeetingIndex].actionItems.length > 0 && (
+            <div>
+              <h3>Action Items</h3>
+              {meetings[currentMeetingIndex].actionItems.map((item, idx) => (
+                <div key={idx} style={{ color: item.status === 'blocked' ? 'red' : 'black' }}>
+                  <p>{item.description}</p>
+                  <p>Status: {item.status}</p>
+                  {item.dueDate && <p>Due Date: {item.dueDate}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Current Meeting */}
+      <div>
+        <div>
+          <span>Timer: {formatTime(timer)}</span>
+          <button onClick={isRunning ? pauseTimer : startTimer}>
+            {isRunning ? 'Pause' : 'Start'}
+          </button>
+          <button onClick={resetTimer}>Reset</button>
+        </div>
+
+        <PhaseNavigation
+          phases={phases}
+          activePhase={activePhase}
+          onPhaseChange={setActivePhase}
         />
+
+        <div>
+          <h2>{phases[activePhase].title} ({phases[activePhase].duration})</h2>
+          <ul>
+            {phases[activePhase].questions.map((question, idx) => (
+              <QuestionItem
+                key={idx}
+                question={question}
+                isCompleted={Boolean(completedTasks[\`\${activePhase}-\${idx}\`])}
+                onToggle={() => toggleTaskCompletion(activePhase, idx)}
+              />
+            ))}
+          </ul>
+          {/* Use ReactQuill for rich text editing */}
+          <ReactQuill
+            value={notes[activePhase]}
+            onChange={(value) => handleNotesChange(activePhase, value)}
+            placeholder="Add notes..."
+          />
+        </div>
+
+        <div>
+          <h3>Tips</h3>
+          <TipsList tips={phases[activePhase].tips} />
+        </div>
+
+        <div>
+          <h3>Red Flags to Watch For:</h3>
+          <ul>
+            {RED_FLAGS.map((flag, idx) => (
+              <li key={idx}>{flag}</li>
+            ))}
+          </ul>
+        </div>
       </div>
 
-      <div>
-        <h3>Tips</h3>
-        <TipsList tips={currentPhase.tips} />
-      </div>
-
-      <div>
-        <h3>Red Flags to Watch For:</h3>
-        <ul>
-          {RED_FLAGS.map((flag, idx) => (
-            <li key={idx}>{flag}</li>
-          ))}
-        </ul>
-      </div>
+      {/* Save Meeting Button */}
+      <button onClick={saveMeeting}>Save Meeting</button>
     </div>
   );
 };
@@ -284,9 +365,12 @@ EOF
 cat > src/hooks/usePhases.ts <<'EOF'
 import { useState, useCallback } from 'react';
 import { PHASES_DATA } from '../constants';
-import { PhaseKey, CompletedTasks, Notes } from '../types';
+import { PhaseKey, CompletedTasks, Notes, Meeting } from '../types';
 
 export const usePhases = () => {
+  const [teamMember, setTeamMember] = useState<string>('teamMember1');
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [currentMeetingIndex, setCurrentMeetingIndex] = useState<number>(-1);
   const [activePhase, setActivePhase] = useState<PhaseKey>('connect');
   const [completedTasks, setCompletedTasks] = useState<CompletedTasks>({});
   const [notes, setNotes] = useState<Notes>(() =>
@@ -307,6 +391,60 @@ export const usePhases = () => {
     }));
   }, []);
 
+  // Load meetings from localStorage
+  const loadMeetings = useCallback(() => {
+    const savedData = localStorage.getItem('meetings');
+    if (savedData) {
+      const data = JSON.parse(savedData);
+      const teamMemberMeetings = data[teamMember] || [];
+      setMeetings(teamMemberMeetings);
+      if (teamMemberMeetings.length > 0) {
+        setCurrentMeetingIndex(teamMemberMeetings.length - 1);
+      } else {
+        setCurrentMeetingIndex(-1);
+      }
+    } else {
+      setMeetings([]);
+      setCurrentMeetingIndex(-1);
+    }
+  }, [teamMember]);
+
+  // Save meetings to localStorage
+  const saveMeeting = useCallback(() => {
+    const newMeeting: Meeting = {
+      date: new Date().toISOString(),
+      phases: notes,
+      completedTasks: completedTasks,
+      actionItems: [], // Placeholder for action items
+    };
+
+    const savedData = localStorage.getItem('meetings');
+    const data = savedData ? JSON.parse(savedData) : {};
+    const teamMemberMeetings = data[teamMember] || [];
+    teamMemberMeetings.push(newMeeting);
+    data[teamMember] = teamMemberMeetings;
+    localStorage.setItem('meetings', JSON.stringify(data));
+    setMeetings(teamMemberMeetings);
+    setCurrentMeetingIndex(teamMemberMeetings.length - 1);
+
+    // Reset notes and completed tasks
+    setNotes(Object.keys(PHASES_DATA).reduce((acc, key) => ({ ...acc, [key]: '' }), {} as Notes));
+    setCompletedTasks({});
+  }, [teamMember, notes, completedTasks]);
+
+  // Load saved data for the current meeting
+  const loadCurrentMeetingData = useCallback(() => {
+    if (currentMeetingIndex >= 0 && meetings[currentMeetingIndex]) {
+      const meeting = meetings[currentMeetingIndex];
+      setNotes(meeting.phases);
+      setCompletedTasks(meeting.completedTasks);
+    } else {
+      // Reset to default if no meeting is selected
+      setNotes(Object.keys(PHASES_DATA).reduce((acc, key) => ({ ...acc, [key]: '' }), {} as Notes));
+      setCompletedTasks({});
+    }
+  }, [currentMeetingIndex, meetings]);
+
   return {
     phases: PHASES_DATA,
     activePhase,
@@ -315,6 +453,14 @@ export const usePhases = () => {
     toggleTaskCompletion,
     notes,
     handleNotesChange,
+    loadMeetings,
+    saveMeeting,
+    loadCurrentMeetingData,
+    meetings,
+    currentMeetingIndex,
+    setCurrentMeetingIndex,
+    teamMember,
+    setTeamMember,
   };
 };
 EOF
@@ -517,6 +663,19 @@ export type Phases = Record<PhaseKey, Phase>;
 export type CompletedTasks = Record<string, boolean>;
 
 export type Notes = Record<PhaseKey, string>;
+
+export interface Meeting {
+  date: string;
+  phases: Notes;
+  completedTasks: CompletedTasks;
+  actionItems: ActionItem[];
+}
+
+export interface ActionItem {
+  description: string;
+  status: 'completed' | 'in_progress' | 'blocked';
+  dueDate?: string;
+}
 EOF
 
 # Update package.json scripts
