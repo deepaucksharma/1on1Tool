@@ -2,32 +2,17 @@
 
 This repository contains a React-based One-on-One Meeting Tool designed to help managers conduct effective and structured one-on-one meetings with their team members. The tool integrates a cheat sheet framework to guide managers through different phases of the meeting and ensure crucial topics are covered.
 
-Phase	Principle	Essential Actions (20%)	Example Questions
-Connect	Build Trust	- Actively Listen: Pay close attention, ask clarifying questions, and reflect back what you hear.
-- Be Present: Minimize distractions, maintain eye contact, and show genuine interest.
-- Be Open: Share brief, relevant personal anecdotes to foster connection.	- "How are you feeling today?"
-- "What's top of mind for you this week?"
-- "I experienced something similar recently..."
-Explore	Understand Needs	- Identify Challenges: Ask about current roadblocks and frustrations.
-- Uncover Motivations: Explore their interests, goals, and what excites them about their work.
-- Offer Support: Ask how you can help them succeed.	- "What's the biggest challenge you're facing right now?"
-- "What are you most excited about in your current project?"
-- "How can I best support you?"
-Structure	Optimize Time	- Set a Clear Agenda: Collaboratively create an agenda with key topics.
-- Prioritize Topics: Focus on the most important items first.
-- Timebox Discussions: Allocate specific time slots for each topic to stay on track.	- "What are the most important things we need to discuss today?"
-- "Let's aim to spend 15 minutes on this topic."
-- "Is there anything else we need to cover before we wrap up?"
-Document	Ensure Clarity	- Capture Key Decisions: Clearly record any decisions made during the meeting.
-- Assign Action Items: Identify specific tasks, assign owners, and set deadlines.
-- Share Notes: Use a shared document for transparency and follow-up.	- "Let's make sure we capture that decision."
-- "Can you take ownership of that action item?"
-- "What's a realistic deadline for completing this?"
-Grow	Facilitate Development	- Discuss Aspirations: Ask about their career goals and how you can help achieve them.
-- Provide Feedback: Offer specific, constructive feedback on their performance.
-- Identify Resources: Suggest relevant training, mentorship, or development opportunities.	- "What are your long-term career goals?"
-- "I've noticed you're excelling in this area. How can we build on that?"
-- "Have you considered this course to help develop that skill?"
+## Cheat Sheet 
+
+The tool is built around a cheat sheet  that guides managers through different phases of a one-on-one meeting, emphasizing the 80/20 principle to focus on the most impactful actions.
+
+| Phase       | Principle            | Essential Actions (20%)                                                                                                                                         | Example Questions                                                                                                                                      |
+|------------|----------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Connect     | Build Trust          | - Actively Listen: Pay close attention, ask clarifying questions, and reflect back what you hear. <br> - Be Present: Minimize distractions, maintain eye contact, and show genuine interest. <br> - Be Open: Share brief, relevant personal anecdotes to foster connection. | - "How are you feeling today?" <br> - "What's top of mind for you this week?" <br> - "I experienced something similar recently..."                  |
+| Explore    | Understand Needs     | - Identify Challenges: Ask about current roadblocks and frustrations. <br> - Uncover Motivations: Explore their interests, goals, and what excites them about their work. <br> - Offer Support: Ask how you can help them succeed.                     | - "What's the biggest challenge you're facing right now?" <br> - "What are you most excited about in your current project?" <br> - "How can I best support you?" |
+| Structure   | Optimize Time       | - Set a Clear Agenda: Collaboratively create an agenda with key topics. <br> - Prioritize Topics: Focus on the most important items first. <br> - Timebox Discussions: Allocate specific time slots for each topic to stay on track.                | - "What are the most important things we need to discuss today?" <br> - "Let's aim to spend 15 minutes on this topic." <br> - "Is there anything else we need to cover before we wrap up?" |
+| Document    | Ensure Clarity       | - Capture Key Decisions: Clearly record any decisions made during the meeting. <br> - Assign Action Items: Identify specific tasks, assign owners, and set deadlines. <br> - Share Notes: Use a shared document for transparency and follow-up.          | - "Let's make sure we capture that decision." <br> - "Can you take ownership of that action item?" <br> - "What's a realistic deadline for completing this?" |
+| Grow       | Facilitate Development | - Discuss Aspirations: Ask about their career goals and how you can help achieve them. <br> - Provide Feedback: Offer specific, constructive feedback on their performance. <br> - Identify Resources: Suggest relevant training, mentorship, or development opportunities. | - "What are your long-term career goals?" <br> - "I've noticed you're excelling in this area. How can we build on that?" <br> - "Have you considered this course to help develop that skill?" |
 
 ## Features
 
