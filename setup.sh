@@ -19,19 +19,43 @@ cd one-on-one-tool
 # Initialize a new React app (using the PWA template)
 npx create-react-app . --template cra-template-pwa
 
-# Install required dependencies
-npm install react-draft-wysiwyg@1.14.7 draft-js@0.11.7 draftjs-to-html@0.10.4 draft-js-export-html@1.4.1 dompurify@3.0.6 \
-  lucide-react@0.264.0 tailwindcss@3.2.7 postcss@8.4.21 autoprefixer@10.4.13 @headlessui/react@1.7.14 @heroicons/react@2.0.18 uuid || {
-    echo "Dependency installation failed. Aborting.";
-    exit 1;
+# Update package.json dependencies and scripts
+cat > package.json <<EOL
+{
+  "dependencies": {
+    "@headlessui/react": "^1.7.14",
+    "@heroicons/react": "^2.0.18",
+    "autoprefixer": "^10.4.13",
+    "dompurify": "^3.0.6",
+    "draft-js": "^0.11.7",
+    "draft-js-export-html": "^1.4.1",
+    "draftjs-to-html": "^0.10.4",
+    "lucide-react": "^0.264.0",
+    "postcss": "^8.4.21",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-draft-wysiwyg": "^1.15.0",
+    "react-scripts": "5.0.1",
+    "tailwindcss": "^3.2.7",
+    "uuid": "^9.0.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  }
 }
+EOL
+
+# Install updated dependencies
+npm install || { echo "Dependency installation failed. Aborting."; exit 1; }
 
 # Initialize Tailwind CSS
 npx tailwindcss init -p
 
 # Update Tailwind CSS configuration
 cat > tailwind.config.js <<EOL
-// tailwind.config.js
 module.exports = {
   content: ['./src/**/*.{js,jsx,ts,tsx}'],
   theme: {
@@ -46,6 +70,14 @@ module.exports = {
     },
   },
   plugins: [],
+  // Important: Add this to prevent conflicts with the rich text editor
+  important: true,
+  // Add this to handle the editor's wrapper class
+  safelist: [
+    'rdw-editor-wrapper',
+    'rdw-editor-toolbar',
+    'public-DraftStyleDefault-block'
+  ]
 };
 EOL
 
@@ -62,6 +94,57 @@ cat > src/index.css <<EOL
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Animation keyframes */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { 
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to { 
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Custom animation classes */
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.2s ease-out;
+}
+
+/* Rich text editor overrides */
+.rdw-editor-wrapper {
+  background-color: white;
+}
+
+.rdw-editor-toolbar {
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 0;
+  padding: 0.5rem;
+}
+
+.rdw-option-wrapper {
+  border: 1px solid #e5e7eb;
+  padding: 0.25rem;
+}
+
+.rdw-option-active {
+  background-color: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.public-DraftStyleDefault-block {
+  margin: 0.5rem 0;
+}
 EOL
 
 # Update index.js
@@ -83,407 +166,187 @@ root.render(
 );
 EOL
 
-# Create constants.js
-cat > src/constants.js <<'EOL'
-// src/constants.js
-export const defaultPhases = [
-  {
-    id: 'connect',
-    title: 'Connect',
-    duration: '5-10 min',
-    purpose: 'Build trust and rapport',
-    principle: 'Build Trust',
-    essentialActions: ['Actively listen', 'Be present', 'Be open'],
-    questions: [
-      {
-        text: 'How are you feeling today?',
-        categories: ['Well-being', 'Relationship'],
-      },
-      {
-        text: "What's top of mind for you this week?",
-        categories: ['Well-being', 'Performance'],
-      },
-    ],
-    tips: ['Start with a personal check-in to build rapport', 'Practice active listening'],
-    redFlags: [],
-  },
-  {
-    id: 'explore',
-    title: 'Explore',
-    duration: '10-15 min',
-    purpose: 'Understand needs, challenges, and motivations',
-    principle: 'Understand Needs',
-    essentialActions: ['Identify challenges', 'Uncover motivations', 'Offer support'],
-    questions: [
-      {
-        text: "What's the biggest challenge you're facing right now?",
-        categories: ['Performance', 'Support'],
-      },
-      {
-        text: 'How can I best support you?',
-        categories: ['Support', 'Relationship'],
-      },
-    ],
-    tips: ['Use open-ended questions', 'Identify challenges early', 'Offer concrete support'],
-    redFlags: ['Signs of disengagement or burnout', 'Lack of progress on key tasks'],
-  },
-];
-
-export const allCategories = [
-  'Performance',
-  'Well-being',
-  'Growth',
-  'Relationship',
-  'Support',
-  'Accountability',
-  'Clarity',
-  'Time Management',
-  'Resources',
-  'Other',
-];
-EOL
-
-# Create hooks directory and useLocalStorage.js
-mkdir -p src/hooks
-cat > src/hooks/useLocalStorage.js <<'EOL'
-// src/hooks/useLocalStorage.js
-import { useState, useEffect } from 'react';
-
-export function useLocalStorage(key, initialValue, options = {}) {
-  const [storedValue, setStoredValue] = useState(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      return item !== null ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.error(`Error parsing localStorage key "${key}":`, error);
-      return options.fallback || initialValue;
-    }
-  });
-
-  const setValue = (value) => {
-    try {
-      const valueToStore =
-        value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-      window.localStorage.setItem(key, JSON.stringify(valueToStore));
-    } catch (error) {
-      console.error(`Error setting localStorage key "${key}":`, error);
-      if (options.onError) options.onError(error);
-    }
-  };
-
-  useEffect(() => {
-    const handleStorageChange = (event) => {
-      if (event.key === key) {
-        setStoredValue(JSON.parse(event.newValue) || initialValue);
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [key]);
-
-  return [storedValue, setValue];
-}
-EOL
-
-
-# Create components directory and files
-mkdir -p src/components
-
-# Create ErrorBoundary.js
-cat > src/components/ErrorBoundary.js <<'EOL'
-// src/components/ErrorBoundary.js
-import React from 'react';
-
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error('Uncaught error:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return <h1>Something went wrong.</h1>;
-    }
-    return this.props.children; 
-  }
-}
-
-export default ErrorBoundary;
-EOL
-
-# Create RichTextEditor.js
-cat > src/components/RichTextEditor.js <<'EOL'
-// src/components/RichTextEditor.js
-import React, { useState, useEffect } from 'react';
-import {
-  EditorState,
-  convertToRaw,
-  ContentState,
-  convertFromHTML,
-} from 'draft-js';
-import { Editor } from 'react-draft-wysiwyg';
-import draftToHtml from 'draftjs-to-html';
-import DOMPurify from 'dompurify';
-
-import 'react-draft-wysiwyg/dist/react-draft-wysiwyg.css';
-
-export default function RichTextEditor({ content, onChange }) {
-  const [editorState, setEditorState] = useState(() =>
-    content
-      ? EditorState.createWithContent(
-          ContentState.createFromBlockArray(convertFromHTML(content))
-        )
-      : EditorState.createEmpty()
-  );
-
-  useEffect(() => {
-    if (content) {
-      const blocksFromHTML = convertFromHTML(content);
-      const newState = ContentState.createFromBlockArray(
-        blocksFromHTML.contentBlocks,
-        blocksFromHTML.entityMap
-      );
-      setEditorState(EditorState.createWithContent(newState));
-    } else {
-      setEditorState(EditorState.createEmpty());
-    }
-  }, [content]);
-
-  const handleEditorChange = (state) => {
-    setEditorState(state);
-    const rawContentState = convertToRaw(state.getCurrentContent());
-    const htmlContent = draftToHtml(rawContentState);
-    const sanitizedContent = DOMPurify.sanitize(htmlContent);
-    onChange(sanitizedContent);
-  };
-
-  return (
-    <div className="border p-2 rounded">
-      <Editor
-        editorState={editorState}
-        onEditorStateChange={handleEditorChange}
-        toolbar={{
-          options: ['inline', 'list', 'textAlign', 'link', 'blockType'],
-          inline: { options: ['bold', 'italic', 'underline'] },
-          list: { options: ['unordered', 'ordered'] },
-        }}
-        editorClassName="min-h-[150px]"
-      />
-    </div>
-  );
-}
-EOL
-
-# Create TagInput.js
-cat > src/components/TagInput.js <<'EOL'
-// src/components/TagInput.js
-import React, { useState, useCallback, useEffect } from 'react';
-
-export default function TagInput({ availableTags, selectedTags, onChange }) {
-  const [pendingTags, setPendingTags] = useState(selectedTags);
-
-  const handleTagClick = useCallback((tag) => {
-    setPendingTags((prevTags) =>
-      prevTags.includes(tag)
-        ? prevTags.filter((t) => t !== tag)
-        : [...prevTags, tag]
-    );
-  }, []);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      onChange(pendingTags);
-    }, 200); // Debounce time in milliseconds
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [pendingTags, onChange]);
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      {availableTags.map((tag) => (
-        <button
-          key={tag}
-          onClick={() => handleTagClick(tag)}
-          className={`px-3 py-1 rounded-full text-sm ${
-            pendingTags.includes(tag)
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-100 hover:bg-gray-200'
-          }`}
-        >
-          {tag}
-        </button>
-      ))}
-    </div>
-  );
-}
-EOL
-
-# Create CheatSheetModal.js
-cat > src/components/CheatSheetModal.js <<'EOL'
-// src/components/CheatSheetModal.js
-import React, { useEffect, useRef } from 'react';
-import { X } from 'lucide-react';
-
-export default function CheatSheetModal({ phase, onClose }) {
-  const modalRef = useRef(null);
-
-  useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, [onClose]);
-
-  const handleOverlayClick = (e) => {
-    if (modalRef.current && modalRef.current === e.target) {
-      e.stopPropagation();
-      onClose();
-    }
-  };
-
-  return (
-    <div
-      ref={modalRef}
-      onClick={handleOverlayClick}
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-    >
-      <div
-        className="bg-white rounded-lg shadow-lg max-w-md w-full p-6 relative"
-        role="dialog"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
-        >
-          <X className="w-5 h-5" />
-        </button>
-        <h2 className="text-xl font-semibold mb-4">{phase.title} Cheat Sheet</h2>
-        <p className="text-sm mb-2">
-          <strong>Principle:</strong> {phase.principle}
-        </p>
-        <p className="text-sm mb-2">
-          <strong>Essential Actions:</strong>
-        </p>
-        <ul className="list-disc list-inside text-sm mb-4">
-          {phase.essentialActions.map((action, i) => (
-            <li key={i}>{action}</li>
-          ))}
-        </ul>
-        <p className="text-sm mb-2">
-          <strong>Suggested Questions:</strong>
-        </p>
-        <ul className="list-disc list-inside text-sm">
-          {phase.questions.map((q, i) => (
-            <li key={i}>{q.text}</li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
-}
-EOL
-
-# Create App.js with your updated code
+# Create updated App.js
 cat > src/App.js <<'EOL'
-// src/App.js
-import React, { useState, useCallback } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { Clock, Info } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { Clock, Info, Save, AlertTriangle } from 'lucide-react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { defaultPhases, allCategories } from './constants';
 import RichTextEditor from './components/RichTextEditor';
 import TagInput from './components/TagInput';
 import CheatSheetModal from './components/CheatSheetModal';
 
+const useAutoSave = (key, value, delay = 1000) => {
+  const [savedValue, setSavedValue] = useLocalStorage(key, value);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsSaving(true);
+      try {
+        setSavedValue(value);
+        setLastSaved(new Date());
+      } catch (error) {
+        console.error('Error saving data:', error);
+      } finally {
+        setIsSaving(false);
+      }
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [value, delay, setSavedValue]);
+
+  return { isSaving, lastSaved };
+};
+
+const Alert = ({ message, type = 'info' }) => (
+  <div className={`rounded-md p-4 mb-4 ${
+    type === 'error' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'
+  }`}>
+    <div className="flex items-center">
+      {type === 'error' ? (
+        <AlertTriangle className="h-5 w-5 mr-2" />
+      ) : (
+        <Info className="h-5 w-5 mr-2" />
+      )}
+      <span>{message}</span>
+    </div>
+  </div>
+);
+
 export default function App() {
-  const [notes, setNotes] = useLocalStorage('oneOnOneNotes', {});
+  const [notes, setNotes] = useState({});
   const [activePhase, setActivePhase] = useState(defaultPhases[0]);
   const [showCheatSheet, setShowCheatSheet] = useState(false);
-  const [selectedTags, setSelectedTags] = useLocalStorage('selectedTags', []);
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [error, setError] = useState(null);
 
-  const handleNoteChange = useCallback(
-    (content) => {
-      setNotes((prevNotes) => ({
-        ...prevNotes,
-        [activePhase.id]: content,
-      }));
-    },
-    [activePhase.id, setNotes]
-  );
+  // Load initial data from localStorage
+  useEffect(() => {
+    try {
+      const savedNotes = localStorage.getItem('oneOnOneNotes');
+      const savedTags = localStorage.getItem('selectedTags');
+      
+      if (savedNotes) setNotes(JSON.parse(savedNotes));
+      if (savedTags) setSelectedTags(JSON.parse(savedTags));
+    } catch (err) {
+      console.error('Error loading saved data:', err);
+      setError('There was an error loading your saved data. Some content might be missing.');
+    }
+  }, []);
 
-  const handleTagChange = useCallback(
-    (newTags) => {
-      setSelectedTags(newTags);
-    },
-    [setSelectedTags]
-  );
+  // Auto-save functionality
+  const { isSaving, lastSaved } = useAutoSave('oneOnOneNotes', notes);
 
-  const handlePhaseChange = useCallback(
-    (phase) => {
-      setActivePhase(phase);
-      setShowCheatSheet(false);
-    },
-    []
-  );
+  const handleNoteChange = useCallback((content) => {
+    setNotes(prevNotes => ({
+      ...prevNotes,
+      [activePhase.id]: content
+    }));
+  }, [activePhase.id]);
+
+  const handleTagChange = useCallback((newTags) => {
+    setSelectedTags(newTags);
+    try {
+      localStorage.setItem('selectedTags', JSON.stringify(newTags));
+    } catch (err) {
+      console.error('Error saving tags:', err);
+      setError('Failed to save tags. Please try again.');
+    }
+  }, []);
+
+  const handlePhaseChange = useCallback((phase) => {
+    setActivePhase(phase);
+    setShowCheatSheet(false);
+  }, []);
+
+  // Memoize filtered questions based on selected tags
+  const filteredQuestions = useMemo(() => {
+    if (!selectedTags.length) return activePhase.questions;
+    return activePhase.questions.filter(q => 
+      q.categories.some(cat => selectedTags.includes(cat))
+    );
+  }, [activePhase.questions, selectedTags]);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-bold text-gray-900">1:1 Meeting Tool</h1>
+      <header className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-bold text-gray-900">1:1 Meeting Tool</h1>
+            <div className="flex items-center space-x-2 text-sm text-gray-500">
+              {isSaving ? (
+                <span className="flex items-center">
+                  <Save className="w-4 h-4 mr-1 animate-spin" />
+                  Saving...
+                </span>
+              ) : lastSaved && (
+                <span className="flex items-center">
+                  Last saved: {new Intl.DateTimeFormat('en-US', {
+                    hour: 'numeric',
+                    minute: 'numeric'
+                  }).format(lastSaved)}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow p-6">
+        {error && (
+          <Alert message={error} type="error" />
+        )}
+
+        <div className="bg-white rounded-lg shadow-sm">
           {/* Phase Navigation */}
-          <div className="flex space-x-4 mb-8 overflow-x-auto">
-            {defaultPhases.map((phase) => (
-              <button
-                key={phase.id}
-                onClick={() => handlePhaseChange(phase)}
-                className={`px-4 py-2 rounded-md flex items-center space-x-2 ${
-                  activePhase.id === phase.id
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                }`}
-              >
-                <span>{phase.title}</span>
-                <Clock className="w-4 h-4" />
-                <span className="text-sm">{phase.duration}</span>
-              </button>
-            ))}
+          <div className="border-b border-gray-200 px-4 py-3">
+            <div className="flex space-x-4 overflow-x-auto">
+              {defaultPhases.map((phase) => (
+                <button
+                  key={phase.id}
+                  onClick={() => handlePhaseChange(phase)}
+                  className={`
+                    px-4 py-2 rounded-md flex items-center space-x-2 whitespace-nowrap
+                    transition-colors duration-200
+                    ${activePhase.id === phase.id
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
+                    }
+                  `}
+                >
+                  <span>{phase.title}</span>
+                  <div className="flex items-center text-sm">
+                    <Clock className="w-4 h-4 mr-1" />
+                    <span>{phase.duration}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Active Phase Content */}
-          <div className="space-y-6">
+          <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">{activePhase.title} Phase</h2>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {activePhase.title} Phase
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {activePhase.purpose}
+                </p>
+              </div>
               <button
                 onClick={() => setShowCheatSheet(true)}
-                className="flex items-center space-x-1 text-blue-500 hover:text-blue-600"
+                className="flex items-center space-x-1 text-blue-600 hover:text-blue-700"
               >
                 <Info className="w-4 h-4" />
                 <span>View Cheat Sheet</span>
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Categories
@@ -494,6 +357,21 @@ export default function App() {
                   onChange={handleTagChange}
                 />
               </div>
+
+              {filteredQuestions.length > 0 && (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">
+                    Suggested Questions
+                  </h3>
+                  <ul className="space-y-2">
+                    {filteredQuestions.map((q, idx) => (
+                      <li key={idx} className="text-sm text-gray-600">
+                        • {q.text}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -518,6 +396,52 @@ export default function App() {
       </main>
     </div>
   );
+}
+EOL
+
+# Create updated useAutoSave.js
+cat > src/hooks/useAutoSave.js <<'EOL'
+import { useState, useEffect } from 'react';
+import { useLocalStorage } from './useLocalStorage';
+
+export function useAutoSave(key, value, options = {}) {
+  const {
+    delay = 1000,
+    onSave,
+    onError,
+  } = options;
+
+  const [savedValue, setSavedValue] = useLocalStorage(key, value);
+  const [status, setStatus] = useState('idle');
+  const [lastSaved, setLastSaved] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setStatus('saving');
+      try {
+        setSavedValue(value);
+        setLastSaved(new Date());
+        setStatus('saved');
+        setError(null);
+        if (onSave) onSave(value);
+      } catch (err) {
+        console.error(`Error saving to ${key}:`, err);
+        setStatus('error');
+        setError(err);
+        if (onError) onError(err);
+      }
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [key, value, delay, setSavedValue, onSave, onError]);
+
+  return {
+    status,
+    lastSaved,
+    error,
+    savedValue,
+  };
 }
 EOL
 
